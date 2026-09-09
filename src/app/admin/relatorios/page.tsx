@@ -1,0 +1,5 @@
+import { PageHeader } from "@/components/admin/page-header";
+import { StatCard } from "@/components/admin/stat-card";
+import { requirePermission } from "@/lib/auth/session";
+import { db } from "@/lib/db";
+export default async function ReportsPage() { await requirePermission("reports.read"); const grouped = await db.contactLead.groupBy({ by: ["status"], _count: true }); const total = grouped.reduce((sum, item) => sum + item._count, 0); const won = grouped.find((item) => item.status === "WON")?._count ?? 0; return <><PageHeader title="Relatórios" description="Resumo do funil de contatos."/><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"><StatCard label="Total" value={total}/>{grouped.map((item) => <StatCard key={item.status} label={item.status} value={item._count}/>)}</div><div className="mt-6 rounded-2xl bg-surface p-6"><h2 className="font-bold">Conversão</h2><p className="mt-3 text-4xl font-bold text-brand-primary-hover">{total ? Math.round(won / total * 100) : 0}%</p><p className="text-sm text-text-muted">Contatos marcados como ganhos sobre o total.</p></div></>; }

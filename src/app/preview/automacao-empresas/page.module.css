@@ -1,0 +1,105 @@
+.flow {
+  position: relative;
+}
+
+.flow::before,
+.flow::after {
+  content: "";
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  top: 50%;
+  height: 1px;
+  pointer-events: none;
+}
+
+.flow::before {
+  background: color-mix(in srgb, var(--color-brand-primary) 20%, transparent);
+}
+
+.flow::after {
+  background: var(--color-brand-primary);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: automation-line 3.6s 0.35s both cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.step {
+  opacity: 0;
+  transform: translateY(0.8rem);
+  animation: automation-step 500ms both cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.step:nth-child(1) {
+  animation-delay: 150ms;
+}
+
+.step:nth-child(2) {
+  animation-delay: 950ms;
+}
+
+.step:nth-child(3) {
+  animation-delay: 1.75s;
+}
+
+.step:nth-child(4) {
+  animation-delay: 2.55s;
+}
+
+.check {
+  transform: scale(0.7);
+  animation: automation-check 500ms 3s both cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes automation-line {
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes automation-step {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes automation-check {
+  to {
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 767px) {
+  .flow::before,
+  .flow::after {
+    bottom: 2rem;
+    left: 1.25rem;
+    right: auto;
+    top: 2rem;
+    width: 1px;
+    height: auto;
+  }
+
+  .flow::after {
+    transform: scaleY(0);
+    transform-origin: top;
+    animation-name: automation-line-mobile;
+  }
+
+  @keyframes automation-line-mobile {
+    to {
+      transform: scaleY(1);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flow::after,
+  .step,
+  .check {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

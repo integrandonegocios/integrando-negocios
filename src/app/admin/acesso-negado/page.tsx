@@ -1,0 +1,2 @@
+import Link from "next/link";
+export default function AccessDeniedPage() { return <div className="mx-auto max-w-xl rounded-3xl bg-surface p-10 text-center"><p className="text-sm font-bold uppercase tracking-widest text-brand-accent">Acesso negado</p><h1 className="mt-3 text-3xl font-bold">Você não possui esta permissão.</h1><Link className="mt-6 inline-block font-semibold text-brand-primary-hover" href="/admin">Voltar ao painel</Link></div>; }

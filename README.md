@@ -1,34 +1,29 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Integrando Negócios
 
-## Getting Started
+Site institucional e área administrativa em Next.js 16, React 19, Tailwind CSS 4, PostgreSQL e Prisma ORM 7.
 
-First, run the development server:
+## Requisitos
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- Node.js 20.19 ou superior
+- PostgreSQL e npm
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Configuração local
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+1. Copie `.env.example` para `.env` e configure `DATABASE_URL`.
+2. Defina `ADMIN_NAME`, `ADMIN_EMAIL` e uma `ADMIN_PASSWORD` com pelo menos 12 caracteres.
+3. Execute `npm install`, `npm run db:generate`, `npm run db:deploy` e `npm run db:seed`.
+4. Inicie com `npm run dev`.
 
-## Learn More
+O site fica em `http://localhost:3000`; a área interna, em `/login` e `/admin`.
 
-To learn more about Next.js, take a look at the following resources:
+## Scripts
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `npm run dev`, `npm run build`, `npm run start`
+- `npm run lint`, `npm run typecheck`
+- `npm run db:generate`, `npm run db:migrate`, `npm run db:deploy`, `npm run db:seed`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Segurança
 
-## Deploy on Vercel
+As sessões usam tokens aleatórios em cookie `HttpOnly`; somente o hash SHA-256 é persistido. Senhas são derivadas com `scrypt`. Páginas e ações administrativas revalidam usuário e permissões no servidor.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Nunca versione `.env` ou credenciais. Em produção, use HTTPS, credenciais exclusivas, backups, rate limiting na borda e rotação periódica de segredos.
