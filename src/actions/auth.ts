@@ -7,13 +7,17 @@ import { createSession, deleteSession } from "@/lib/auth/session";
 import { loginSchema } from "@/lib/validation";
 import { verifyPassword } from "@/lib/security/password";
 
-export type AuthState = { error?: string };
+export type AuthState = {
+  error?: string;
+};
 
 export async function login(
   _: AuthState,
   formData: FormData
 ): Promise<AuthState> {
-  const parsed = loginSchema.safeParse(Object.fromEntries(formData));
+  const parsed = loginSchema.safeParse(
+    Object.fromEntries(formData)
+  );
 
   if (!parsed.success) {
     console.log("LOGIN_DEBUG", {
@@ -22,7 +26,9 @@ export async function login(
     });
 
     return {
-      error: parsed.error.issues[0]?.message ?? "Dados inválidos.",
+      error:
+        parsed.error.issues[0]?.message ??
+        "Dados inválidos.",
     };
   }
 
@@ -39,12 +45,31 @@ export async function login(
       )
     : false;
 
- console.log("LOGIN_DEBUG", {
-  usuarioEncontrado: !!user,
-  status: user?.status,
-  senhaCorreta: passwordValid,
-  tamanhoSenhaRecebida: parsed.data.password.length,
-});
+  const envPassword =
+    process.env.ADMIN_PASSWORD;
+
+  const envPasswordValid =
+    user && envPassword
+      ? await verifyPassword(
+          envPassword,
+          user.passwordHash
+        )
+      : false;
+
+  console.log("LOGIN_DEBUG", {
+    usuarioEncontrado: !!user,
+    status: user?.status,
+    senhaCorreta: passwordValid,
+    tamanhoSenhaRecebida:
+      parsed.data.password.length,
+    tamanhoSenhaEnv:
+      envPassword?.length,
+    senhaDigitadaIgualEnv:
+      parsed.data.password ===
+      envPassword,
+    senhaEnvConfereComBanco:
+      envPasswordValid,
+  });
 
   const valid =
     user &&
