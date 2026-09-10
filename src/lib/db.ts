@@ -14,7 +14,9 @@ const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
 function createPrismaClient() {
   return new PrismaClient({
     adapter: new PrismaPg({ connectionString: databaseUrl }),
-    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
+    // Prisma error output can include query arguments (password/token hashes).
+    // Callers report sanitized operational events instead.
+    log: [],
   });
 }
 

@@ -20,6 +20,8 @@ export default async function SettingsPage() {
         description="Parâmetros não sensíveis da aplicação."
       />
 
+      <a className="mb-6 inline-block font-semibold underline" href="/admin/configuracoes/seguranca">Alterar minha senha</a>
+
       <form
         action={saveSetting}
         className="flex max-w-2xl flex-col gap-3 rounded-2xl bg-surface p-6"

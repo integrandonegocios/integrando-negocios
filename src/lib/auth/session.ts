@@ -13,10 +13,18 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-export async function createSession(userId: string) {
+export async function createSession(userId: string, verifiedPasswordHash: string) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 86_400_000);
-  await db.session.create({ data: { userId, tokenHash: hashToken(token), expiresAt } });
+  const created = await db.$transaction(async tx => {
+    // A login verified before a concurrent reset must not create a new session afterward.
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
+    const user = await tx.user.findFirst({ where: { id: userId, status: "ACTIVE", passwordHash: verifiedPasswordHash }, select: { id: true } });
+    if (!user) return false;
+    await tx.session.create({ data: { userId, tokenHash: hashToken(token), expiresAt } });
+    return true;
+  });
+  if (!created) return false;
   (await cookies()).set(COOKIE_NAME, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -24,6 +32,7 @@ export async function createSession(userId: string) {
     path: "/",
     expires: expiresAt,
   });
+  return true;
 }
 
 export async function deleteSession() {
@@ -48,6 +57,7 @@ export const getSessionUser = cache(async () => {
   });
   if (!session || session.expiresAt <= new Date() || session.user.status !== "ACTIVE") return null;
   return {
+    sessionId: session.id,
     id: session.user.id,
     name: session.user.name,
     email: session.user.email,

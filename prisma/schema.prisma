@@ -41,6 +41,7 @@ model User {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
   roles        UserRole[]
+  passwordResetTokens PasswordResetToken[]
   sessions     Session[]
   assignedLeads ContactLead[] @relation("LeadAssignee")
   notifications Notification[]
@@ -184,4 +185,25 @@ model AppSetting {
   key       String   @id
   value     Json
   updatedAt DateTime @updatedAt
+}
+
+model PasswordResetToken {
+  id String @id @default(cuid())
+  userId String
+  tokenHash String @unique
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model AuthRateLimit {
+  key String @id
+  attempts Int
+  expiresAt DateTime
+
+  @@index([expiresAt])
 }

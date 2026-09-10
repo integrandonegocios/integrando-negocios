@@ -1,7 +1,6 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createHash } from "node:crypto";
 
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
@@ -13,15 +12,6 @@ export type AuthState = {
   error?: string;
 };
 
-function fingerprint(value?: string) {
-  if (!value) return null;
-
-  return createHash("sha256")
-    .update(value)
-    .digest("hex")
-    .slice(0, 12);
-}
-
 export async function login(
   _: AuthState,
   formData: FormData
@@ -31,11 +21,6 @@ export async function login(
   );
 
   if (!parsed.success) {
-    console.log("LOGIN_DEBUG", {
-      etapa: "validacao",
-      erro: parsed.error.issues[0]?.message,
-    });
-
     return {
       error:
         parsed.error.issues[0]?.message ??
@@ -55,40 +40,6 @@ export async function login(
         user.passwordHash
       )
     : false;
-
-  const envPassword = process.env.ADMIN_PASSWORD;
-
-  const envPasswordValid =
-    user && envPassword
-      ? await verifyPassword(
-          envPassword,
-          user.passwordHash
-        )
-      : false;
-
-  console.log("LOGIN_DEBUG", {
-    usuarioEncontrado: !!user,
-    status: user?.status,
-    senhaCorreta: passwordValid,
-
-    tamanhoSenhaRecebida:
-      parsed.data.password.length,
-
-    tamanhoSenhaEnv:
-      envPassword?.length,
-
-    senhaDigitadaIgualEnv:
-      parsed.data.password === envPassword,
-
-    senhaEnvConfereComBanco:
-      envPasswordValid,
-
-    fingerprintBanco:
-      fingerprint(process.env.DATABASE_URL),
-
-    fingerprintHash:
-      fingerprint(user?.passwordHash),
-  });
 
   const valid =
     user &&
@@ -110,7 +61,9 @@ export async function login(
     },
   });
 
-  await createSession(user.id);
+  if (!await createSession(user.id, user.passwordHash)) {
+    return { error: "E-mail ou senha inválidos." };
+  }
 
   await audit({
     actorUserId: user.id,
