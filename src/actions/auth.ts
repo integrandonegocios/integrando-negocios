@@ -39,11 +39,12 @@ export async function login(
       )
     : false;
 
-  console.log("LOGIN_DEBUG", {
-    usuarioEncontrado: !!user,
-    status: user?.status,
-    senhaCorreta: passwordValid,
-  });
+ console.log("LOGIN_DEBUG", {
+  usuarioEncontrado: !!user,
+  status: user?.status,
+  senhaCorreta: passwordValid,
+  tamanhoSenhaRecebida: parsed.data.password.length,
+});
 
   const valid =
     user &&
