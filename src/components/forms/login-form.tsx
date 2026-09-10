@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { login } from "@/actions/auth";
 import { SubmitButton } from "./submit-button";
@@ -11,5 +12,6 @@ export function LoginForm() {
     <label className="block text-sm font-semibold">Senha<input autoComplete="current-password" className="mt-2 w-full rounded-xl border border-border-strong bg-surface px-4 py-3 font-normal outline-none transition focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20" minLength={8} name="password" required type="password" /></label>
     {state.error && <p className="rounded-lg bg-status-danger-subtle p-3 text-sm text-status-danger" role="alert">{state.error}</p>}
     <SubmitButton className="w-full" pendingLabel="Entrando...">Entrar</SubmitButton>
+    <Link className="block text-center text-sm font-semibold underline" href="/esqueci-senha">Esqueci minha senha</Link>
   </form>;
 }
