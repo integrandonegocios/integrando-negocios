@@ -1,6 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { createHash } from "node:crypto";
+
 import { db } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { createSession, deleteSession } from "@/lib/auth/session";
@@ -10,6 +12,15 @@ import { verifyPassword } from "@/lib/security/password";
 export type AuthState = {
   error?: string;
 };
+
+function fingerprint(value?: string) {
+  if (!value) return null;
+
+  return createHash("sha256")
+    .update(value)
+    .digest("hex")
+    .slice(0, 12);
+}
 
 export async function login(
   _: AuthState,
@@ -45,8 +56,7 @@ export async function login(
       )
     : false;
 
-  const envPassword =
-    process.env.ADMIN_PASSWORD;
+  const envPassword = process.env.ADMIN_PASSWORD;
 
   const envPasswordValid =
     user && envPassword
@@ -60,15 +70,24 @@ export async function login(
     usuarioEncontrado: !!user,
     status: user?.status,
     senhaCorreta: passwordValid,
+
     tamanhoSenhaRecebida:
       parsed.data.password.length,
+
     tamanhoSenhaEnv:
       envPassword?.length,
+
     senhaDigitadaIgualEnv:
-      parsed.data.password ===
-      envPassword,
+      parsed.data.password === envPassword,
+
     senhaEnvConfereComBanco:
       envPasswordValid,
+
+    fingerprintBanco:
+      fingerprint(process.env.DATABASE_URL),
+
+    fingerprintHash:
+      fingerprint(user?.passwordHash),
   });
 
   const valid =
