@@ -13,3 +13,10 @@ export const rolePermissions: Record<string, readonly PermissionKey[]> = {
   ATENDIMENTO: ["dashboard.read", "contacts.read", "contacts.update"],
   AUDITOR: ["dashboard.read", "reports.read", "audit.read"],
 };
+
+type DelegatedRole = { name: string; permissions: { permission: { key: string } }[] };
+
+export function canManageRole(actor: { permissions: ReadonlySet<string> }, role: DelegatedRole) {
+  return (role.name !== "SUPER_ADMIN" || actor.permissions.has("roles.manage")) &&
+    role.permissions.every(({ permission }) => actor.permissions.has(permission.key));
+}

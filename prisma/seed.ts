@@ -3,7 +3,7 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { randomBytes, scrypt as scryptCallback } from "node:crypto";
 import { promisify } from "node:util";
-import { permissions, rolePermissions } from "../src/lib/auth/permissions";
+import { provisionInitialData } from "./bootstrap";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -27,115 +27,19 @@ async function passwordHash(password: string) {
 }
 
 async function main() {
-  // Cria/atualiza permissões
-  for (const key of permissions) {
-    const [resource, action] = key.split(".");
-
-    await db.permission.upsert({
-      where: { key },
-      update: { resource, action },
-      create: {
-        key,
-        resource,
-        action,
-      },
-    });
-  }
-
-  // Cria/atualiza perfis
-  for (const [name, keys] of Object.entries(rolePermissions)) {
-    const role = await db.role.upsert({
-      where: { name },
-      update: {},
-      create: {
-        name,
-        description: `Perfil de sistema ${name}`,
-        system: true,
-      },
-    });
-
-    const records = await db.permission.findMany({
-      where: {
-        key: {
-          in: [...keys],
-        },
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    await db.rolePermission.deleteMany({
-      where: {
-        roleId: role.id,
-      },
-    });
-
-    await db.rolePermission.createMany({
-      data: records.map(({ id }) => ({
-        roleId: role.id,
-        permissionId: id,
-      })),
-    });
-  }
-
-  // Cria ou atualiza administrador
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.ADMIN_PASSWORD;
-
-  if (email && password) {
-    if (password.length < 12) {
-      throw new Error(
-        "ADMIN_PASSWORD deve ter ao menos 12 caracteres."
-      );
-    }
-
-    const role = await db.role.findUniqueOrThrow({
-      where: {
-        name: "SUPER_ADMIN",
-      },
-    });
-
-    const hash = await passwordHash(password);
-
-    await db.user.upsert({
-      where: {
-        email,
-      },
-
-      // Se o usuário já existir, atualiza a senha
-      update: {
-        passwordHash: hash,
-        status: "ACTIVE",
-      },
-
-      // Se não existir, cria
-      create: {
-        name:
-          process.env.ADMIN_NAME?.trim() ||
-          "Administrador",
-        email,
-        passwordHash: hash,
-        status: "ACTIVE",
-        roles: {
-          create: {
-            roleId: role.id,
-          },
-        },
-      },
-    });
-
-    console.log(`Administrador provisionado: ${email}`);
-  } else {
-    console.warn(
-      "ADMIN_EMAIL/ADMIN_PASSWORD ausentes: perfis criados, mas nenhum administrador foi provisionado."
-    );
-  }
+  if ((email && !password) || (!email && password)) throw new Error("Informe ADMIN_EMAIL e ADMIN_PASSWORD juntos.");
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("ADMIN_EMAIL inválido.");
+  if (password && (password.length < 12 || password.length > 128)) throw new Error("ADMIN_PASSWORD deve ter de 12 a 128 caracteres.");
+  const hash = password ? await passwordHash(password) : undefined;
+  const result = await provisionInitialData(db, email && hash ? { email, hash, name: process.env.ADMIN_NAME?.trim() } : undefined);
+  console.log(result);
 }
 
 main()
-  .catch((error) => {
-    console.error(error);
+  .catch(() => {
+    console.error("Falha no provisionamento inicial. Verifique a configuração e a conexão com o banco.");
     process.exitCode = 1;
   })
   .finally(async () => {

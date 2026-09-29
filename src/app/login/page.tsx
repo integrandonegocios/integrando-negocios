@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/forms/login-form";
 import { getSessionUser } from "@/lib/auth/session";
 
-export const metadata = { title: "Acesso interno" };
+export const metadata = { title: "Acesso interno", robots: { index: false, follow: false } };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ senha?: string }> }) {
   const passwordReset = (await searchParams).senha === "redefinida";

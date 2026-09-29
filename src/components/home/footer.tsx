@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { getPublicSettings } from "@/lib/public-settings";
 
 function InstagramIcon() {
   return (
@@ -20,7 +21,8 @@ function WhatsAppIcon() {
   );
 }
 
-export function Footer() {
+export async function Footer() {
+  const settings = await getPublicSettings();
   return (
     <footer className="border-t border-border bg-background-secondary">
       <div className="mx-auto max-w-7xl px-5 py-12 sm:px-8">
@@ -47,10 +49,10 @@ export function Footer() {
             <p className="mt-4 text-sm leading-6 text-text-secondary">Quer conversar sobre uma solução para sua empresa?</p>
             <a className="mt-3 inline-block text-sm font-semibold text-brand-primary-hover hover:text-brand-accent" href="/contato">Solicitar orçamento →</a>
             <div className="mt-6 flex items-center gap-3">
-              <a aria-label="Acessar Instagram da Integrando Negócios" className="grid size-11 place-items-center rounded-lg border border-border bg-surface text-text-primary transition hover:-translate-y-0.5 hover:border-brand-primary hover:text-brand-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary" href="https://instagram.com/integrandonegocios.oficial" rel="noreferrer" target="_blank">
+              <a aria-label="Acessar Instagram da Integrando Negócios" className="grid size-11 place-items-center rounded-lg border border-border bg-surface text-text-primary transition hover:-translate-y-0.5 hover:border-brand-primary hover:text-brand-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary" href={settings.instagram} rel="noreferrer" target="_blank">
                 <InstagramIcon />
               </a>
-              <a aria-label="Conversar com a Integrando Negócios pelo WhatsApp" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#25d366] px-4 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#1ebe5d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#25d366]" href="https://wa.me/5585988952760" rel="noreferrer" target="_blank">
+              <a aria-label="Conversar com a Integrando Negócios pelo WhatsApp" className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-[#25d366] px-4 text-sm font-semibold text-text-primary transition hover:-translate-y-0.5 hover:bg-[#1ebe5d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#25d366]" href={`https://wa.me/${settings.phone}`} rel="noreferrer" target="_blank">
                 <WhatsAppIcon />
                 WhatsApp
               </a>

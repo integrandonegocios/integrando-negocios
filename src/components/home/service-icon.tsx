@@ -16,6 +16,7 @@ function IconPaths({ name }: ServiceIconProps) {
       return <><path d="M7.5 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM16.5 12a3 3 0 1 0 0-6" /><path d="M2 20a5.5 5.5 0 0 1 11 0M14 14.5a5 5 0 0 1 8 4" /></>;
     case "identity":
       return <><path d="M12 2.5 14.7 9l6.8 3-6.8 3L12 21.5 9.3 15l-6.8-3 6.8-3z" /><path d="m18.5 3 .7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" /></>;
+    default:
     case "systems":
       return <><rect height="13" rx="2" width="19" x="2.5" y="3.5" /><path d="M8 21h8M12 16.5V21M6.5 7.5h4M6.5 11h7" /></>;
     case "automation":

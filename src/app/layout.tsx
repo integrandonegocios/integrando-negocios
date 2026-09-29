@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { siteUrl } from "@/lib/site-url";
 
 export const metadata: Metadata = {
+  metadataBase: siteUrl(),
+  openGraph: { type: "website", locale: "pt_BR", siteName: "Integrando Negócios" },
   title: {
     default: "Integrando Negócios | Soluções digitais para empresas",
     template: "%s | Integrando Negócios",

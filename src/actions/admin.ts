@@ -9,16 +9,14 @@ import { hashPassword } from "@/lib/security/password";
 
 import {
   deletePortfolioImage,
-  deletePortfolioImageByUrl,
   uploadPortfolioImage,
 } from "@/lib/storage/cloudinary";
 
-import { userSchema } from "@/lib/validation";
+import { userSchema, userStatusSchema, leadStatusSchema, serviceSchema, serviceStatusSchema, settingSchema } from "@/lib/validation";
+import { canManageRole } from "@/lib/auth/permissions";
 
 import type {
-  LeadStatus,
   PublicationStatus,
-  UserStatus,
 } from "@/generated/prisma/client";
 
 const text = (data: FormData, key: string) =>
@@ -36,159 +34,88 @@ const slugify = (value: string) =>
    USUÁRIOS
 ============================================================ */
 
+// Serialize account administration, including the last-super-admin check.
+// Read the actor again under the same lock so a concurrent disable cannot authorize a write.
+async function accountActor(tx: import("@/generated/prisma/client").Prisma.TransactionClient, id: string, permission: string) {
+  await tx.$queryRaw`SELECT "id" FROM "Role" WHERE "name" = 'SUPER_ADMIN' FOR UPDATE`;
+  await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${id} FOR UPDATE`;
+  const user = await tx.user.findUnique({ where: { id }, include: { roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } } });
+  const permissions = new Set(user?.roles.flatMap(({ role }) => role.permissions.map(({ permission }) => permission.key)));
+  if (!user || user.status !== "ACTIVE" || !permissions.has(permission)) throw new Error("Acesso negado.");
+  return { id, permissions };
+}
+
 export async function createUser(formData: FormData) {
-  const actor = await requirePermission("users.create");
-
+  const session = await requirePermission("users.create");
   const parsed = userSchema.safeParse(Object.fromEntries(formData));
-
-  if (!parsed.success) {
-    throw new Error("Dados de usuário inválidos.");
-  }
-
-  const user = await db.user.create({
-    data: {
-      name: parsed.data.name,
-      email: parsed.data.email,
-      passwordHash: await hashPassword(parsed.data.password),
-      roles: {
-        create: {
-          roleId: parsed.data.roleId,
-        },
-      },
-    },
+  if (!parsed.success) throw new Error("Dados de usuário inválidos. Use uma senha de 12 a 128 caracteres.");
+  const passwordHash = await hashPassword(parsed.data.password);
+  await db.$transaction(async tx => {
+    const actor = await accountActor(tx, session.id, "users.create");
+    const role = await tx.role.findUnique({ where: { id: parsed.data.roleId }, include: { permissions: { include: { permission: true } } } });
+    if (!role || !canManageRole(actor, role)) throw new Error("Você não pode conceder esse perfil.");
+    const user = await tx.user.create({ data: {
+      name: parsed.data.name, email: parsed.data.email, passwordHash,
+      roles: { create: { roleId: role.id } },
+    } });
+    await audit({ actorUserId: actor.id, action: "CREATE", entityType: "User", entityId: user.id }, tx);
   });
-
-  await audit({
-    actorUserId: actor.id,
-    action: "CREATE",
-    entityType: "User",
-    entityId: user.id,
-  });
-
   revalidatePath("/admin/usuarios");
 }
 
 export async function setUserStatus(formData: FormData) {
-  const actor = await requirePermission("users.disable");
-
-  const id = text(formData, "id");
-  const status = text(formData, "status") as UserStatus;
-
-  if (id === actor.id && status !== "ACTIVE") {
-    throw new Error("Você não pode desativar a própria conta.");
-  }
-
-  await db.$transaction([
-    db.user.update({
-      where: { id },
-      data: { status },
-    }),
-
-    ...(status !== "ACTIVE"
-      ? [
-          db.session.deleteMany({
-            where: {
-              userId: id,
-            },
-          }),
-        ]
-      : []),
-  ]);
-
-  await audit({
-    actorUserId: actor.id,
-    action: "STATUS_UPDATE",
-    entityType: "User",
-    entityId: id,
-    metadata: {
-      status,
-    },
+  const session = await requirePermission("users.disable");
+  const { id, status } = userStatusSchema.parse(Object.fromEntries(formData));
+  if (id === session.id && status !== "ACTIVE") throw new Error("Você não pode desativar a própria conta.");
+  await db.$transaction(async tx => {
+    const actor = await accountActor(tx, session.id, "users.disable");
+    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${id} FOR UPDATE`;
+    const target = await tx.user.findUnique({ where: { id }, include: { roles: { include: { role: { include: { permissions: { include: { permission: true } } } } } } } });
+    if (!target || !target.roles.every(({ role }) => canManageRole(actor, role))) throw new Error("Você não pode gerenciar essa conta.");
+    if (status !== "ACTIVE" && target.status === "ACTIVE" && target.roles.some(({ role }) => role.name === "SUPER_ADMIN")) {
+      const count = await tx.user.count({ where: { status: "ACTIVE", roles: { some: { role: { name: "SUPER_ADMIN" } } } } });
+      if (count <= 1) throw new Error("Mantenha ao menos um SUPER_ADMIN ativo.");
+    }
+    await tx.user.update({ where: { id }, data: { status } });
+    if (status !== "ACTIVE") {
+      await tx.session.deleteMany({ where: { userId: id } });
+      await tx.passwordResetToken.deleteMany({ where: { userId: id } });
+    }
+    await audit({ actorUserId: actor.id, action: "STATUS_UPDATE", entityType: "User", entityId: id, metadata: { status } }, tx);
   });
-
   revalidatePath("/admin/usuarios");
 }
 
-/* ============================================================
-   CONTATOS
-============================================================ */
-
 export async function setLeadStatus(formData: FormData) {
   const actor = await requirePermission("contacts.update");
-
-  const id = text(formData, "id");
-  const status = text(formData, "status") as LeadStatus;
-
-  await db.contactLead.update({
-    where: { id },
-    data: { status },
+  const { id, status } = leadStatusSchema.parse(Object.fromEntries(formData));
+  await db.$transaction(async tx => {
+    await tx.contactLead.update({ where: { id }, data: { status } });
+    await audit({ actorUserId: actor.id, action: "STATUS_UPDATE", entityType: "ContactLead", entityId: id, metadata: { status } }, tx);
   });
-
-  await audit({
-    actorUserId: actor.id,
-    action: "STATUS_UPDATE",
-    entityType: "ContactLead",
-    entityId: id,
-    metadata: {
-      status,
-    },
-  });
-
   revalidatePath("/admin/contatos");
   revalidatePath(`/admin/contatos/${id}`);
 }
 
-/* ============================================================
-   SERVIÇOS
-============================================================ */
-
 export async function saveService(formData: FormData) {
   const actor = await requirePermission("services.manage");
-
-  const title = text(formData, "title");
-
-  const item = await db.service.create({
-    data: {
-      title,
-      slug: slugify(title),
-      description: text(formData, "description"),
-      icon: text(formData, "icon") || "✦",
-      position: Number(text(formData, "position") || 0),
-    },
+  const { id, ...fields } = serviceSchema.parse(Object.fromEntries(formData));
+  const data = { ...fields, slug: slugify(fields.title) };
+  await db.$transaction(async tx => {
+    const item = id ? await tx.service.update({ where: { id }, data }) : await tx.service.create({ data });
+    await audit({ actorUserId: actor.id, action: id ? "UPDATE" : "CREATE", entityType: "Service", entityId: item.id }, tx);
   });
-
-  await audit({
-    actorUserId: actor.id,
-    action: "CREATE",
-    entityType: "Service",
-    entityId: item.id,
-  });
-
   revalidatePath("/admin/servicos");
   revalidatePath("/");
 }
 
 export async function toggleService(formData: FormData) {
   const actor = await requirePermission("services.manage");
-
-  const id = text(formData, "id");
-
-  const item = await db.service.update({
-    where: { id },
-    data: {
-      active: text(formData, "active") === "true",
-    },
+  const { id, active } = serviceStatusSchema.parse(Object.fromEntries(formData));
+  await db.$transaction(async tx => {
+    await tx.service.update({ where: { id }, data: { active: active === "true" } });
+    await audit({ actorUserId: actor.id, action: "STATUS_UPDATE", entityType: "Service", entityId: id, metadata: { active: active === "true" } }, tx);
   });
-
-  await audit({
-    actorUserId: actor.id,
-    action: "STATUS_UPDATE",
-    entityType: "Service",
-    entityId: id,
-    metadata: {
-      active: item.active,
-    },
-  });
-
   revalidatePath("/admin/servicos");
   revalidatePath("/");
 }
@@ -240,8 +167,8 @@ export async function savePortfolioCase(
   }
 
   if (
-    !title ||
-    !summary ||
+    !slugify(title) || title.length > 160 ||
+    !summary || summary.length > 3000 || text(formData, "content").length > 30000 ||
     !["DRAFT", "PUBLISHED", "ARCHIVED"].includes(status)
   ) {
     return {
@@ -257,7 +184,7 @@ export async function savePortfolioCase(
     };
   }
 
-  if (manualImageUrl && selectedImages.length === 0) {
+  if (manualImageUrl && manualImageUrl !== existing?.imageUrl && selectedImages.length === 0) {
     try {
       const parsedUrl = new URL(manualImageUrl);
 
@@ -315,53 +242,23 @@ export async function savePortfolioCase(
           : null,
     };
 
-    const item = existing
-      ? await db.portfolioCase.update({
-          where: {
-            id: existing.id,
-          },
-          data,
-        })
-      : await db.portfolioCase.create({
-          data,
-        });
-
+    await db.$transaction(async tx => {
+      let entityId: string;
+      if (existing) {
+        const updated = await tx.portfolioCase.updateMany({ where: { id: existing.id, updatedAt: existing.updatedAt }, data });
+        if (updated.count !== 1) throw new Error("CONCURRENT_PORTFOLIO_EDIT");
+        entityId = existing.id;
+      } else {
+        entityId = (await tx.portfolioCase.create({ data })).id;
+      }
+      await audit({ actorUserId: actor.id, action: existing ? "UPDATE" : "CREATE", entityType: "PortfolioCase", entityId, metadata: { uploadedImageCount: uploadedImages.length } }, tx);
+    });
     persisted = true;
     revalidatePath("/admin/portfolio");
     revalidatePath("/");
     revalidatePath("/projetos");
-
-    await audit({
-      actorUserId: actor.id,
-      action: existing ? "UPDATE" : "CREATE",
-      entityType: "PortfolioCase",
-      entityId: item.id,
-      metadata: {
-        uploadedImageCount: uploadedImages.length,
-      },
-    });
-
-    if (
-      existing &&
-      (imageUrls.length || manualImageChanged)
-    ) {
-      const retainedUrls = new Set([
-        imageUrl,
-        ...galleryUrls,
-      ]);
-
-      const replacedUrls = [
-        existing.imageUrl,
-        ...existing.galleryUrls,
-      ].filter(
-        (url): url is string =>
-          Boolean(url) && !retainedUrls.has(url),
-      );
-
-      await Promise.all(
-        replacedUrls.map(deletePortfolioImageByUrl),
-      );
-    }
+    // Existing URLs may be shared or manually supplied. Retain them until an
+    // explicit storage inventory can prove ownership and absence of references.
 
     const operation = existing
       ? "atualizado"
@@ -377,8 +274,8 @@ export async function savePortfolioCase(
           } e case ${operation} com sucesso.`
         : `Case ${operation} com sucesso.`,
     };
-  } catch (error) {
-    await Promise.all(
+  } catch {
+    await Promise.allSettled(
       (persisted ? [] : uploadedImages).map((image) =>
         deletePortfolioImage(image.publicId),
       ),
@@ -386,10 +283,7 @@ export async function savePortfolioCase(
 
     return {
       status: "error",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Não foi possível criar o case.",
+      message: "Não foi possível salvar o projeto. Atualize a página e tente novamente.",
     };
   }
 }
@@ -421,33 +315,15 @@ export async function deletePortfolioCase(
     throw new Error("Projeto não encontrado.");
   }
 
-  await db.portfolioCase.delete({
-    where: {
-      id,
-    },
+  await db.$transaction(async tx => {
+    await tx.portfolioCase.delete({ where: { id } });
+    await audit({ actorUserId: actor.id, action: "DELETE", entityType: "PortfolioCase", entityId: id }, tx);
   });
-
   revalidatePath("/admin/portfolio");
   revalidatePath("/");
   revalidatePath("/projetos");
+  // Shared/manual images are intentionally retained in storage.
 
-  await audit({
-    actorUserId: actor.id,
-    action: "DELETE",
-    entityType: "PortfolioCase",
-    entityId: id,
-  });
-
-  const imageUrls = [
-    item.imageUrl,
-    ...item.galleryUrls,
-  ].filter(
-    (url): url is string => Boolean(url),
-  );
-
-  await Promise.all(
-    imageUrls.map(deletePortfolioImageByUrl),
-  );
 }
 
 /* ============================================================
@@ -485,28 +361,10 @@ export async function saveSetting(
     "settings.manage",
   );
 
-  const key = text(formData, "key");
-  const value = text(formData, "value");
-
-  await db.appSetting.upsert({
-    where: {
-      key,
-    },
-    create: {
-      key,
-      value,
-    },
-    update: {
-      value,
-    },
+  const { key, value } = settingSchema.parse(Object.fromEntries(formData));
+  await db.$transaction(async tx => {
+    await tx.appSetting.upsert({ where: { key }, create: { key, value }, update: { value } });
+    await audit({ actorUserId: actor.id, action: "UPSERT", entityType: "AppSetting", entityId: key }, tx);
   });
-
-  await audit({
-    actorUserId: actor.id,
-    action: "UPSERT",
-    entityType: "AppSetting",
-    entityId: key,
-  });
-
-  revalidatePath("/admin/configuracoes");
+  revalidatePath("/", "layout");
 }

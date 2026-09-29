@@ -1,15 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type PortfolioProject = {
   id: string;
   title: string;
-  category: "Sites" | "Marketing" | "Design" | "Sistemas" | "Inteligência Artificial";
-  eyebrow: string;
   description: string;
-  services: string[];
+  content?: string;
   image?: string;
   imageAlt: string;
   imagePosition?: string;
@@ -55,12 +53,14 @@ function ProjectCard({ project, onOpen }: { project: PortfolioProject; onOpen?: 
         </a>
       ) : image}
       <h3 className="mt-4 text-lg font-semibold tracking-tight text-text-primary">{project.title}</h3>
+      <p className="mt-2 text-sm leading-6 text-text-secondary">{project.description}</p>
     </article>
   );
 }
 
 export function PortfolioShowcase({ managedProjects, limit, columns = 3, enableLightbox = false }: { managedProjects: PortfolioProject[]; limit?: number; columns?: 3 | 4; enableLightbox?: boolean }) {
   const visibleProjects = typeof limit === "number" ? managedProjects.slice(0, limit) : managedProjects;
+  const dialogRef = useRef<HTMLDialogElement>(null);
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [imageIndex, setImageIndex] = useState(0);
   const selectedProject = lightboxIndex === null ? undefined : visibleProjects[lightboxIndex];
@@ -75,6 +75,9 @@ export function PortfolioShowcase({ managedProjects, limit, columns = 3, enableL
 
   useEffect(() => {
     if (lightboxIndex === null) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    dialog?.showModal();
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -84,6 +87,8 @@ export function PortfolioShowcase({ managedProjects, limit, columns = 3, enableL
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => {
+      dialog?.close();
+      previousFocus?.focus();
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
@@ -97,7 +102,7 @@ export function PortfolioShowcase({ managedProjects, limit, columns = 3, enableL
       </div>
 
       {selectedProject && selectedImage && (
-        <div aria-label={`Galeria do projeto ${selectedProject.title}`} aria-modal="true" className="fixed inset-0 z-50 grid place-items-center bg-surface-inverse/95 p-4 sm:p-8" onClick={() => setLightboxIndex(null)} role="dialog">
+        <dialog ref={dialogRef} onCancel={(event) => { event.preventDefault(); setLightboxIndex(null); }} aria-label={`Galeria do projeto ${selectedProject.title}`} aria-modal="true" className="fixed inset-0 z-50 m-0 grid h-svh max-h-none w-screen max-w-none place-items-center bg-surface-inverse/95 p-4 sm:p-8" onClick={() => setLightboxIndex(null)} >
           <div className="relative flex h-full max-h-[56rem] w-full max-w-7xl flex-col" onClick={(event) => event.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between gap-5 text-text-inverse">
               <div>
@@ -114,6 +119,7 @@ export function PortfolioShowcase({ managedProjects, limit, columns = 3, enableL
               <ProjectImage image={selectedImage.image} imageAlt={selectedImage.imageAlt} imagePosition={selectedImage.imagePosition} lightbox />
             </div>
 
+            {selectedProject.content && <p className="mt-4 max-h-28 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-text-inverse-muted">{selectedProject.content}</p>}
             {imageCount > 1 && (
               <div className="mt-4 flex justify-between gap-4">
                 <button aria-label="Imagem anterior deste projeto" className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-text-inverse/20 px-4 text-sm font-semibold text-text-inverse transition hover:border-brand-primary hover:text-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary" onClick={previousImage} type="button">← Anterior</button>
@@ -121,7 +127,7 @@ export function PortfolioShowcase({ managedProjects, limit, columns = 3, enableL
               </div>
             )}
           </div>
-        </div>
+        </dialog>
       )}
     </div>
   );

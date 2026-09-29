@@ -4,6 +4,10 @@ import { Header } from "@/components/home/header";
 import { Hero } from "@/components/home/hero";
 import { ContactCta, Differentials, Portfolio, Services } from "@/components/home/sections";
 
+import { canonical } from "@/lib/site-url";
+
+export const metadata = { alternates: canonical("/") };
+
 export default async function Home() {
   await connection();
   return (

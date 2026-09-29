@@ -1,12 +1,15 @@
+import { Pagination } from "@/components/pagination";
+import { PAGE_SIZE, pageNumber } from "@/lib/pagination";
 import { PageHeader } from "@/components/admin/page-header";
 import { DeletePortfolioCaseButton } from "@/components/admin/delete-portfolio-case-button";
 import { PortfolioCaseForm } from "@/components/admin/portfolio-case-form";
 import { requirePermission } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
-export default async function PortfolioPage() {
+export default async function PortfolioPage({ searchParams }: { searchParams: Promise<{ page?: string }> }) {
+  const page = pageNumber((await searchParams).page);
   await requirePermission("portfolio.manage");
-  const items = await db.portfolioCase.findMany({ orderBy: { createdAt: "desc" } });
+  const items = await db.portfolioCase.findMany({ orderBy: [{ createdAt: "desc" }, { id: "asc" }], take: PAGE_SIZE + 1, skip: (page - 1) * PAGE_SIZE });
 
   return (
     <>
@@ -16,7 +19,7 @@ export default async function PortfolioPage() {
         <PortfolioCaseForm />
       </details>
       <div className="grid gap-4 md:grid-cols-2">
-        {items.map((item) => (
+        {items.slice(0, PAGE_SIZE).map((item) => (
           <article className="rounded-2xl border border-border bg-surface p-5" key={item.id}>
             {item.imageUrl && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -40,6 +43,7 @@ export default async function PortfolioPage() {
           </article>
         ))}
       </div>
+      <Pagination page={page} hasNext={items.length > PAGE_SIZE} path="/admin/portfolio" />
     </>
   );
 }

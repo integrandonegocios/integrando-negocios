@@ -4,20 +4,16 @@ import { PortfolioShowcase } from "./portfolio-showcase";
 import { db } from "@/lib/db";
 import { getPublishedPortfolioProjects } from "@/lib/portfolio";
 
-const services = [
-  { title: "Inteligência Artificial", description: "Aplicações de IA para produtividade, automação, análise e novas soluções digitais.", icon: "ai", href: "/preview/inteligencia-artificial" },
-  { title: "Sites e Landing Pages", description: "Sites modernos e páginas estratégicas para fortalecer sua presença digital, divulgar serviços e gerar conversões.", icon: "site", href: "/preview/sites-sistemas-web" },
-  { title: "Marketing e Redes Sociais", description: "Estratégia, conteúdo e presença digital para fortalecer marcas, aproximar clientes e gerar oportunidades.", icon: "marketing", href: "/contato" },
-  { title: "Identidade Visual", description: "Construção de uma identidade profissional e consistente para sua marca.", icon: "identity", href: "/contato" },
-  { title: "Sistemas Web", description: "Sistemas personalizados desenvolvidos para processos e necessidades específicas.", icon: "systems", href: "/preview/sites-sistemas-web" },
-] as const;
-
 export async function Services() {
-  const managed = await db.service.findMany({ where: { active: true }, orderBy: [{ position: "asc" }, { title: "asc" }] }).catch(() => []);
-  const displayServices = services.map((service) => {
-    const override = managed.find((item) => item.title.toLocaleLowerCase("pt-BR") === service.title.toLocaleLowerCase("pt-BR"));
-    return { ...service, description: override?.description || service.description, icon: override?.icon || service.icon };
-  });
+  let managed;
+  try {
+    managed = await db.service.findMany({ where: { active: true }, orderBy: [{ position: "asc" }, { title: "asc" }, { id: "asc" }] });
+  } catch {
+    console.error("PUBLIC_SERVICES_UNAVAILABLE");
+    return <section id="servicos" className="mx-auto max-w-7xl px-5 py-20"><h2 className="text-3xl font-bold">Serviços</h2><p className="mt-4">Não foi possível carregar os serviços agora. <Link className="underline" href="/contato">Converse com nossa equipe.</Link></p></section>;
+  }
+  const displayServices = managed.map(service => ({ ...service, href: `/servicos/${service.slug}` }));
+  if (!displayServices.length) return <section id="servicos" className="mx-auto max-w-7xl px-5 py-20"><h2 className="text-3xl font-bold">Serviços</h2><p className="mt-4">Nenhum serviço disponível no momento. <Link className="underline" href="/contato">Fale com nossa equipe.</Link></p></section>;
   const primaryService = displayServices[0];
   const complementaryServices = displayServices.slice(1);
   const complementaryStyles = [
@@ -38,7 +34,7 @@ export async function Services() {
           <p className="mt-5 max-w-2xl text-base leading-7 text-text-secondary sm:text-lg">Estratégia, design e tecnologia para transformar ideias em soluções digitais profissionais.</p>
         </div>
         <div className="mt-14 overflow-hidden rounded-xl border border-border bg-border shadow-lg shadow-text-primary/[0.04] lg:mt-16 lg:grid lg:min-h-[44rem] lg:grid-cols-[1.35fr_1fr]">
-          <article className="group relative flex min-h-[32rem] flex-col overflow-hidden bg-brand-primary p-8 text-text-primary transition duration-300 hover:bg-brand-primary-hover hover:text-text-inverse sm:p-10 lg:min-h-full lg:p-12" data-service-slug="inteligência-artificial">
+          <article className="group relative flex min-h-[32rem] flex-col overflow-hidden bg-brand-primary p-8 text-text-primary transition duration-300 hover:bg-brand-primary-hover hover:text-text-inverse sm:p-10 lg:min-h-full lg:p-12" data-service-slug={primaryService.slug}>
             <div aria-hidden="true" className="pointer-events-none absolute -right-24 -top-24 size-80 rounded-full border border-text-primary/10 bg-text-inverse/10" />
             <div className="relative flex items-start justify-between gap-6">
               <div className="origin-top-left scale-125"><ServiceIcon name={primaryService.icon as ServiceIconName} /></div>
@@ -55,9 +51,9 @@ export async function Services() {
 
           <div className="grid gap-px md:grid-cols-2">
             {complementaryServices.map((service, index) => {
-              const dark = index >= 2;
+              const dark = index % complementaryStyles.length >= 2;
               return (
-                <article className={`group flex min-h-56 flex-col p-6 transition duration-300 hover:relative hover:z-10 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-text-primary/10 sm:p-7 ${complementaryStyles[index]}`} data-service-slug={service.title.toLocaleLowerCase("pt-BR").replaceAll(" ", "-")} key={service.title}>
+                <article className={`group flex min-h-56 flex-col p-6 transition duration-300 hover:relative hover:z-10 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-text-primary/10 sm:p-7 ${complementaryStyles[index % complementaryStyles.length]}`} data-service-slug={service.title.toLocaleLowerCase("pt-BR").replaceAll(" ", "-")} key={service.id}>
                   <div className="flex items-start justify-between gap-4">
                     <ServiceIcon name={service.icon as ServiceIconName} />
                     <span className={`text-xs font-semibold tabular-nums ${dark ? "text-text-inverse-muted" : "text-text-muted"}`}>{String(index + 1).padStart(2, "0")}</span>
@@ -85,7 +81,13 @@ export function Differentials() {
 }
 
 export async function Portfolio() {
-  const managedProjects = await getPublishedPortfolioProjects(3);
+  let managedProjects;
+  try {
+    managedProjects = await getPublishedPortfolioProjects(3);
+  } catch {
+    console.error("PUBLIC_PORTFOLIO_UNAVAILABLE");
+    return <section id="portfolio" className="mx-auto max-w-7xl px-5 py-20"><h2 className="text-3xl font-bold">Projetos</h2><p className="mt-4">Não foi possível carregar os projetos agora. Tente novamente em instantes.</p></section>;
+  }
 
   return (
     <section className="scroll-mt-24 bg-background py-20 sm:py-28 lg:py-32" id="portfolio">

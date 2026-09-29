@@ -3,6 +3,8 @@ import { Sidebar } from "@/components/admin/sidebar";
 import { requireUser } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 
+export const metadata = { robots: { index: false, follow: false } };
+
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const unread = await db.notification.count({ where: { userId: user.id, readAt: null } });

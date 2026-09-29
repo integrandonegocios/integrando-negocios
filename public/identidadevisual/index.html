@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+<title>Integrando Negócios | Em Desenvolvimento</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"/>
+
+<style>
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+}
+
+:root{
+    --bg:#050505;
+    --gold:#ffb400;
+    --gold-light:#ffd977;
+    --white:#ffffff;
+    --gray:#9ca3af;
+}
+
+body{
+    font-family:'Inter',sans-serif;
+    background:var(--bg);
+    color:var(--white);
+    overflow:hidden;
+    min-height:100vh;
+    position:relative;
+}
+
+/* BACKGROUND */
+
+.background{
+    position:absolute;
+    inset:0;
+    overflow:hidden;
+}
+
+.grid{
+    position:absolute;
+    inset:0;
+
+    background-image:
+    linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+
+    background-size:70px 70px;
+
+    mask-image:radial-gradient(circle at center, black 20%, transparent 85%);
+}
+
+.glow{
+    position:absolute;
+    border-radius:50%;
+    filter:blur(120px);
+}
+
+.glow1{
+    width:450px;
+    height:450px;
+    background:#ffb400;
+    opacity:.10;
+    top:-180px;
+    left:-180px;
+}
+
+.glow2{
+    width:400px;
+    height:400px;
+    background:#ffb400;
+    opacity:.06;
+    bottom:-180px;
+    right:-180px;
+}
+
+/* MAIN */
+
+.main{
+    position:relative;
+    z-index:5;
+
+    width:100%;
+    min-height:100vh;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    padding:20px;
+}
+
+/* CARD */
+
+.card{
+    position:relative;
+
+    width:100%;
+    max-width:950px;
+
+    padding:70px 40px;
+
+    border-radius:38px;
+
+    background:
+    linear-gradient(
+        135deg,
+        rgba(255,255,255,.05),
+        rgba(255,255,255,.02)
+    );
+
+    border:1px solid rgba(255,255,255,.08);
+
+    backdrop-filter:blur(18px);
+
+    overflow:hidden;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-direction:column;
+
+    text-align:center;
+
+    box-shadow:
+    0 40px 100px rgba(0,0,0,.7),
+    inset 0 0 0 1px rgba(255,255,255,.02);
+}
+
+/* LINHA */
+
+.card::before{
+    content:"";
+
+    position:absolute;
+    top:0;
+    left:0;
+
+    width:100%;
+    height:3px;
+
+    background:
+    linear-gradient(
+        90deg,
+        transparent,
+        var(--gold),
+        transparent
+    );
+}
+
+/* LOGO */
+
+.logo-wrapper{
+    position:relative;
+
+    width:360px;
+    height:360px;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    margin-bottom:25px;
+}
+
+.circle{
+    position:absolute;
+    border-radius:50%;
+    border:1px solid rgba(255,255,255,.08);
+}
+
+.circle1{
+    width:360px;
+    height:360px;
+    animation:rotate 18s linear infinite;
+}
+
+.circle2{
+    width:270px;
+    height:270px;
+    animation:rotateReverse 12s linear infinite;
+}
+
+.circle::before{
+    content:"";
+
+    position:absolute;
+    top:-5px;
+    left:50%;
+
+    width:10px;
+    height:10px;
+
+    border-radius:50%;
+
+    background:var(--gold);
+
+    transform:translateX(-50%);
+
+    box-shadow:0 0 20px var(--gold);
+}
+
+@keyframes rotate{
+    from{
+        transform:rotate(0deg);
+    }
+    to{
+        transform:rotate(360deg);
+    }
+}
+
+@keyframes rotateReverse{
+    from{
+        transform:rotate(360deg);
+    }
+    to{
+        transform:rotate(0deg);
+    }
+}
+
+.logo{
+    width:240px;
+    position:relative;
+    z-index:5;
+
+    filter:
+    drop-shadow(0 20px 40px rgba(255,180,0,.15));
+}
+
+/* TEXTO */
+
+.small{
+    color:var(--gold);
+
+    text-transform:uppercase;
+
+    letter-spacing:4px;
+
+    font-size:10px;
+
+    font-weight:700;
+
+    margin-bottom:14px;
+}
+
+h1{
+    font-size:clamp(28px,4vw,54px);
+
+    line-height:1.1;
+
+    letter-spacing:-2px;
+
+    font-weight:800;
+
+    margin-bottom:14px;
+}
+
+.highlight{
+    background:linear-gradient(
+        90deg,
+        var(--gold),
+        var(--gold-light)
+    );
+
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+}
+
+.description{
+    max-width:500px;
+
+    font-size:14px;
+
+    line-height:1.8;
+
+    color:var(--gray);
+
+    margin-bottom:30px;
+}
+
+/* BOTÕES */
+
+.buttons{
+    display:flex;
+    gap:16px;
+    justify-content:center;
+    align-items:center;
+}
+
+.btn{
+    width:58px;
+    height:58px;
+
+    border-radius:50%;
+
+    display:flex;
+    align-items:center;
+    justify-content:center;
+
+    text-decoration:none;
+
+    color:#fff;
+
+    position:relative;
+
+    overflow:hidden;
+
+    transition:.4s;
+
+    border:1px solid rgba(255,255,255,.08);
+}
+
+.btn::before{
+    content:"";
+
+    position:absolute;
+    inset:0;
+
+    background:
+    linear-gradient(
+        120deg,
+        transparent,
+        rgba(255,255,255,.18),
+        transparent
+    );
+
+    transform:translateX(-100%);
+}
+
+.btn:hover::before{
+    transform:translateX(100%);
+    transition:1s;
+}
+
+.btn:hover{
+    transform:translateY(-5px) scale(1.08);
+}
+
+.instagram{
+    background:
+    linear-gradient(
+        135deg,
+        #833ab4,
+        #fd1d1d,
+        #fcb045
+    );
+
+    box-shadow:
+    0 10px 25px rgba(253,29,29,.18);
+}
+
+.whatsapp{
+    background:
+    linear-gradient(
+        135deg,
+        #00b96b,
+        #00e676
+    );
+
+    box-shadow:
+    0 10px 25px rgba(0,230,118,.18);
+}
+
+.btn i{
+    font-size:20px;
+}
+
+/* FOOTER */
+
+.footer{
+    margin-top:35px;
+
+    color:#6b7280;
+
+    font-size:11px;
+
+    letter-spacing:2px;
+
+    text-transform:uppercase;
+}
+
+/* RESPONSIVO */
+
+@media(max-width:768px){
+
+    body{
+        overflow:auto;
+    }
+
+    .card{
+        padding:50px 25px;
+    }
+
+    .logo-wrapper{
+        width:260px;
+        height:260px;
+    }
+
+    .circle1{
+        width:260px;
+        height:260px;
+    }
+
+    .circle2{
+        width:190px;
+        height:190px;
+    }
+
+    .logo{
+        width:180px;
+    }
+
+    h1{
+        font-size:34px;
+    }
+
+    .description{
+        font-size:13px;
+    }
+
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- BACKGROUND -->
+<div class="background">
+
+    <div class="grid"></div>
+
+    <div class="glow glow1"></div>
+    <div class="glow glow2"></div>
+
+</div>
+
+<!-- MAIN -->
+<section class="main">
+
+    <div class="card">
+
+        <!-- LOGO -->
+        <div class="logo-wrapper">
+
+            <div class="circle circle1"></div>
+            <div class="circle circle2"></div>
+
+            <img
+                src="https://www.integrandonegocios.com.br/identidadevisual/logo.png"
+                alt="Integrando Negócios"
+                class="logo"
+            >
+
+        </div>
+
+        <!-- TEXTO -->
+        <div class="small">
+            Nova Experiência Digital
+        </div>
+
+        <h1>
+            Novo site <span class="highlight">em desenvolvimento</span>
+        </h1>
+
+        <p class="description">
+            Estamos criando uma nova experiência digital para a Integrando Negócios.
+        </p>
+
+        <!-- BOTÕES -->
+        <div class="buttons">
+
+            <a
+                href="https://instagram.com/integrandonegocios.oficial"
+                target="_blank"
+                class="btn instagram"
+                aria-label="Instagram"
+            >
+                <i class="fa-brands fa-instagram"></i>
+            </a>
+
+            <a
+                href="https://wa.me/5585988952760"
+                target="_blank"
+                class="btn whatsapp"
+                aria-label="WhatsApp"
+            >
+                <i class="fa-brands fa-whatsapp"></i>
+            </a>
+
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+            Integrando Negócios © 2026
+        </div>
+
+    </div>
+
+</section>
+
+</body>
+</html>

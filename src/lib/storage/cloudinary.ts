@@ -35,7 +35,7 @@ function signature(parameters: Record<string, string>, secret: string) {
 async function hasValidSignature(file: File) {
   const bytes = new Uint8Array(await file.slice(0, 12).arrayBuffer());
   const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  const png = bytes.slice(0, 8).every((value, index) => value === [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a][index]);
+  const png = bytes.length >= 8 && bytes.slice(0, 8).every((value, index) => value === [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a][index]);
   const webp = String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
 
   return (file.type === "image/jpeg" && jpeg) || (file.type === "image/png" && png) || (file.type === "image/webp" && webp);
@@ -74,7 +74,8 @@ export async function uploadPortfolioImage(file: File) {
 }
 
 export async function deletePortfolioImage(publicId: string) {
-  const { cloudName, apiKey, apiSecret } = config();
+  const { cloudName, apiKey, apiSecret, folder } = config();
+  if (!publicId.startsWith(`${folder}/`)) throw new Error("INVALID_ASSET_FOLDER");
   const timestamp = String(Math.floor(Date.now() / 1000));
   const parameters = { public_id: publicId, timestamp };
   const body = new URLSearchParams({
@@ -84,11 +85,12 @@ export async function deletePortfolioImage(publicId: string) {
     signature: signature(parameters, apiSecret),
   });
 
-  await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/image/destroy`, {
+  const response = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(cloudName)}/image/destroy`, {
     method: "POST",
     body,
     signal: AbortSignal.timeout(15_000),
-  }).catch(() => undefined);
+  });
+  if (!response.ok) throw new Error("IMAGE_DELETE_FAILED");
 }
 
 export async function deletePortfolioImageByUrl(url: string) {

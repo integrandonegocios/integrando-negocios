@@ -28,12 +28,10 @@ export default async function SettingsPage() {
       >
         <label className="text-sm font-semibold">
           Chave
-          <input
-            className="mt-2 w-full rounded-lg border border-border-strong p-3 focus:border-brand-primary focus:outline-none focus:ring-2 focus:ring-brand-primary/20"
-            name="key"
-            placeholder="company.phone"
-            required
-          />
+          <select className="mt-2 w-full rounded-lg border border-border-strong p-3" name="key" required>
+            <option value="company.phone">WhatsApp (código do país e número, apenas dígitos)</option>
+            <option value="company.instagram">Instagram (URL HTTPS)</option>
+          </select>
         </label>
 
         <label className="text-sm font-semibold">

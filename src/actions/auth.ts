@@ -7,6 +7,10 @@ import { audit } from "@/lib/audit";
 import { createSession, deleteSession } from "@/lib/auth/session";
 import { loginSchema } from "@/lib/validation";
 import { verifyPassword } from "@/lib/security/password";
+import { allowAuthAttempt } from "@/lib/security/rate-limit";
+
+// Same scrypt work for an unknown account, without a usable credential.
+const dummyHash = `scrypt:${"0".repeat(32)}:${"0".repeat(128)}`;
 
 export type AuthState = {
   error?: string;
@@ -28,18 +32,21 @@ export async function login(
     };
   }
 
+  try {
+    if (!await allowAuthAttempt("login", parsed.data.email)) {
+      return { error: "Muitas tentativas. Aguarde 15 minutos." };
+    }
+  } catch {
+    return { error: "Não foi possível entrar agora. Tente novamente." };
+  }
+
   const user = await db.user.findUnique({
     where: {
       email: parsed.data.email,
     },
   });
 
-  const passwordValid = user
-    ? await verifyPassword(
-        parsed.data.password,
-        user.passwordHash
-      )
-    : false;
+  const passwordValid = await verifyPassword(parsed.data.password, user?.passwordHash ?? dummyHash);
 
   const valid =
     user &&
