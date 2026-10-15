@@ -17,7 +17,7 @@ async function fixture() {
   const newPassword = randomBytes(20).toString("hex");
   const user = { id: "user-1", email: "account@example.test", status: "ACTIVE", passwordHash: await passwords.hashPassword(oldPassword) };
   let state = { user, sessions: ["current", "other"], records: [] as Token[], events: [] as object[] };
-  let authenticated = true, limited = false, deliveryFailure = false, auditFailure = false, found = true;
+  let authenticated = true, limited = false, deliveryFailure = false, auditFailure = false, found = true, emailConfigured = true;
   const pending: (() => Promise<void>)[] = [];
   const sent: string[] = [];
   let queue: Promise<unknown> = Promise.resolve();
@@ -59,7 +59,10 @@ async function fixture() {
     "@/lib/security/reset-token": tokens,
     "@/lib/security/rate-limit": { allowAuthAttempt: async () => !limited },
     "@/lib/validation": validation,
-    "@/lib/email": { sendPasswordResetEmail: async (_email: string, token: string) => { if (deliveryFailure) throw new Error("TEST_DELIVERY_FAILURE"); sent.push(token); } },
+    "@/lib/email": {
+      passwordResetEmailConfigurationError: () => emailConfigured ? null : "EMAIL_NOT_CONFIGURED",
+      sendPasswordResetEmail: async (_email: string, token: string) => { if (deliveryFailure) throw new Error("TEST_DELIVERY_FAILURE"); sent.push(token); },
+    },
   });
   return {
     actions, oldPassword, newPassword, sent,
@@ -68,9 +71,10 @@ async function fixture() {
     request: () => actions.requestPasswordReset({}, form({ email: user.email })),
     flush: async () => { while (pending.length) await pending.shift()!(); },
     reset: (token: string, override = {}) => actions.resetPassword({}, form({ token, newPassword, confirmPassword: newPassword, ...override })),
-    configure: (options: { authenticated?: boolean; limited?: boolean; found?: boolean; status?: string; deliveryFailure?: boolean; auditFailure?: boolean }) => {
+    configure: (options: { authenticated?: boolean; limited?: boolean; found?: boolean; status?: string; deliveryFailure?: boolean; auditFailure?: boolean; emailConfigured?: boolean }) => {
       authenticated = options.authenticated ?? authenticated; limited = options.limited ?? limited; found = options.found ?? found;
       deliveryFailure = options.deliveryFailure ?? deliveryFailure; auditFailure = options.auditFailure ?? auditFailure;
+      emailConfigured = options.emailConfigured ?? emailConfigured;
       state.user.status = options.status ?? state.user.status;
     },
   };
@@ -112,6 +116,15 @@ test("recuperação responde igualmente para conta ativa, inexistente, inativa e
   assert.equal(f.sent.length, 1);
 });
 
+test("recuperação informa indisponibilidade sem consultar a conta quando a configuração de e-mail falta", async () => {
+  const f = await fixture();
+  f.configure({ emailConfigured: false });
+  const response = await f.request();
+  assert.equal(response.error, "A recuperação de senha está temporariamente indisponível. Contate o administrador.");
+  assert.equal(f.sent.length, 0);
+  assert.equal(f.state().records.length, 0);
+});
+
 test("nova solicitação invalida token anterior; falha de envio remove token sem expor erro", async t => {
   const f = await fixture(); await f.request(); await f.flush(); const previous = f.sent[0];
   await f.request(); await f.flush(); assert.equal(f.state().records.length, 1);
@@ -119,7 +132,7 @@ test("nova solicitação invalida token anterior; falha de envio remove token se
   const logs: unknown[][] = []; t.mock.method(console, "error", (...args: unknown[]) => logs.push(args));
   f.configure({ deliveryFailure: true }); assert.ok((await f.request()).success); await f.flush();
   assert.equal(f.state().records.length, 0);
-  assert.deepEqual(logs, [["PASSWORD_RESET_EMAIL_FAILED"]]);
+  assert.deepEqual(logs, [["PASSWORD_RESET_EMAIL_FAILED", "EMAIL_DELIVERY_FAILED"]]);
 });
 
 test("redefinição rejeita token ausente, inválido, expirado, usado, conta inativa e confirmação divergente", async () => {

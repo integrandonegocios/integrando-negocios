@@ -16,6 +16,12 @@ Site institucional e área administrativa em Next.js 16, React 19, Tailwind CSS 
 
 O site fica em `http://localhost:3000`; a área interna, em `/login` e `/admin`.
 
+## Recuperação de senha em produção
+
+O envio do link usa o Resend. Configure `APP_URL` com a URL HTTPS pública do site, `RESEND_API_KEY` com uma chave válida e `EMAIL_FROM` com um remetente/domínio verificado no Resend. Na Vercel, adicione as três variáveis em **Project Settings → Environment Variables** para **Production** e faça um novo deploy para aplicá-las.
+
+Sem essas variáveis ou com `APP_URL` inválida, o formulário informa que a recuperação está temporariamente indisponível. Falhas de entrega do Resend ficam registradas nos logs da função da Vercel como `PASSWORD_RESET_EMAIL_FAILED`; o código HTTP ajuda a identificar a causa. Consulte também os logs de e-mail no painel do Resend. A confirmação normal do formulário é intencionalmente igual para e-mails cadastrados e não cadastrados.
+
 ## Scripts
 
 - `npm run dev`, `npm run build`, `npm run start`

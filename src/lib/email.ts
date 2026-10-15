@@ -1,12 +1,27 @@
 import "server-only";
 
+export function passwordResetEmailConfigurationError(): "EMAIL_NOT_CONFIGURED" | "INVALID_APP_URL" | null {
+  const { APP_URL, RESEND_API_KEY, EMAIL_FROM } = process.env;
+  if (!APP_URL || !RESEND_API_KEY || !EMAIL_FROM) return "EMAIL_NOT_CONFIGURED";
+
+  try {
+    const origin = new URL(APP_URL);
+    if (origin.username || origin.password || (origin.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && origin.protocol === "http:" && origin.hostname === "localhost"))) {
+      return "INVALID_APP_URL";
+    }
+  } catch {
+    return "INVALID_APP_URL";
+  }
+
+  return null;
+}
+
 export async function sendPasswordResetEmail(email: string, token: string) {
   const { APP_URL, RESEND_API_KEY, EMAIL_FROM } = process.env;
+  const configurationError = passwordResetEmailConfigurationError();
+  if (configurationError) throw new Error(configurationError);
   if (!APP_URL || !RESEND_API_KEY || !EMAIL_FROM) throw new Error("EMAIL_NOT_CONFIGURED");
   const origin = new URL(APP_URL);
-  if (origin.username || origin.password || (origin.protocol !== "https:" && !(process.env.NODE_ENV !== "production" && origin.protocol === "http:" && origin.hostname === "localhost"))) {
-    throw new Error("INVALID_APP_URL");
-  }
   const url = new URL("/redefinir-senha", origin.origin);
   // Fragment keeps the bearer token out of HTTP URLs and access logs.
   url.hash = `token=${token}`;
@@ -21,5 +36,5 @@ export async function sendPasswordResetEmail(email: string, token: string) {
     }),
     signal: AbortSignal.timeout(10_000),
   });
-  if (!response.ok) throw new Error("EMAIL_DELIVERY_FAILED");
+  if (!response.ok) throw new Error(`EMAIL_DELIVERY_FAILED_${response.status}`);
 }

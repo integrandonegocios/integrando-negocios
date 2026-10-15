@@ -9,7 +9,7 @@ import { hashPassword, verifyPassword } from "@/lib/security/password";
 import { createResetToken, hashResetToken } from "@/lib/security/reset-token";
 import { allowAuthAttempt } from "@/lib/security/rate-limit";
 import { changePasswordSchema, forgotPasswordSchema, resetPasswordSchema } from "@/lib/validation";
-import { sendPasswordResetEmail } from "@/lib/email";
+import { passwordResetEmailConfigurationError, sendPasswordResetEmail } from "@/lib/email";
 
 export type PasswordState = { error?: string; success?: string };
 const genericMessage = "Se existir uma conta cadastrada com esse e-mail, enviaremos as instruções para redefinição da senha.";
@@ -47,6 +47,11 @@ export async function requestPasswordReset(_: PasswordState, formData: FormData)
   if (!parsed.success) return { error: "Informe um e-mail válido." };
   try {
     if (await allowAuthAttempt("forgot", parsed.data.email)) {
+      const configurationError = passwordResetEmailConfigurationError();
+      if (configurationError) {
+        console.error("PASSWORD_RESET_EMAIL_CONFIGURATION_FAILED", configurationError);
+        return { error: "A recuperação de senha está temporariamente indisponível. Contate o administrador." };
+      }
       // Account lookup and provider latency cannot affect the public response timing.
       after(async () => {
         try {
@@ -62,9 +67,12 @@ export async function requestPasswordReset(_: PasswordState, formData: FormData)
           if (issued) {
             try {
               await sendPasswordResetEmail(issued.email, issued.token);
-            } catch {
+            } catch (error) {
               await db.passwordResetToken.deleteMany({ where: { tokenHash: issued.tokenHash } });
-              console.error("PASSWORD_RESET_EMAIL_FAILED");
+              const code = error instanceof Error && /^EMAIL_DELIVERY_FAILED_[1-5]\d\d$/.test(error.message)
+                ? error.message
+                : "EMAIL_DELIVERY_FAILED";
+              console.error("PASSWORD_RESET_EMAIL_FAILED", code);
             }
           }
         } catch {

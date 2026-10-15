@@ -27,7 +27,10 @@ test("envio usa configuração do servidor e fragmento; falhas não expõem resp
   const keys = ["APP_URL", "RESEND_API_KEY", "EMAIL_FROM"] as const;
   const original = Object.fromEntries(keys.map(key => [key, process.env[key]]));
   t.after(() => { for (const key of keys) { if (original[key] === undefined) delete process.env[key]; else process.env[key] = original[key]; } });
-  const email = loadServerModule<{ sendPasswordResetEmail(email: string, token: string): Promise<void> }>("src/lib/email.ts");
+  const email = loadServerModule<{
+    passwordResetEmailConfigurationError(): string | null;
+    sendPasswordResetEmail(email: string, token: string): Promise<void>;
+  }>("src/lib/email.ts");
   const token = randomBytes(32).toString("hex");
   let calls = 0, fail = false;
   t.mock.method(globalThis, "fetch", async (input: string, init: RequestInit) => {
@@ -42,6 +45,7 @@ test("envio usa configuração do servidor e fragmento; falhas não expõem resp
     return new Response(fail ? "PRIVATE_PROVIDER_DETAILS" : "{}", { status: fail ? 500 : 200 });
   });
   for (const key of keys) delete process.env[key];
+  assert.equal(email.passwordResetEmailConfigurationError(), "EMAIL_NOT_CONFIGURED");
   await assert.rejects(email.sendPasswordResetEmail("recipient@example.test", token), { message: "EMAIL_NOT_CONFIGURED" });
   assert.equal(calls, 0);
   process.env.APP_URL = "https://example.test";
@@ -50,7 +54,7 @@ test("envio usa configuração do servidor e fragmento; falhas não expõem resp
   process.env.RESEND_API_KEY = randomBytes(24).toString("hex");
   await email.sendPasswordResetEmail("recipient@example.test", token); assert.equal(calls, 1);
   fail = true;
-  await assert.rejects(email.sendPasswordResetEmail("recipient@example.test", token), { message: "EMAIL_DELIVERY_FAILED" });
+  await assert.rejects(email.sendPasswordResetEmail("recipient@example.test", token), { message: "EMAIL_DELIVERY_FAILED_500" });
   process.env.APP_URL = "https://user:password@example.test";
   await assert.rejects(email.sendPasswordResetEmail("recipient@example.test", token), { message: "INVALID_APP_URL" });
   assert.equal(calls, 2);
