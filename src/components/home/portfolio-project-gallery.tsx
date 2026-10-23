@@ -19,7 +19,7 @@ export function PortfolioProjectGallery({ images }: { images: PortfolioGalleryIm
     <div>
       <div className="relative grid aspect-video place-items-center overflow-hidden rounded-xl border border-border bg-surface-inverse-deep">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img alt={activeImage.imageAlt} className="size-full object-cover" fetchPriority="high" src={activeImage.image} />
+        <img alt={activeImage.imageAlt} className="size-full object-contain" fetchPriority="high" src={activeImage.image} />
         {images.length > 1 && (
           <>
             <button aria-label="Imagem anterior" className="absolute left-3 grid size-11 place-items-center rounded-full bg-surface-inverse/80 text-xl text-text-inverse transition hover:bg-surface-inverse focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary" onClick={previousImage} type="button">←</button>
@@ -42,7 +42,7 @@ export function PortfolioProjectGallery({ images }: { images: PortfolioGalleryIm
               type="button"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img alt="" className="size-full object-cover" loading="lazy" src={image.image} />
+              <img alt="" className="size-full object-contain" loading="lazy" src={image.image} />
             </button>
           ))}
         </div>
