@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 export type PortfolioProject = {
   id: string;
+  slug: string;
   title: string;
   description: string;
   content?: string;
@@ -48,7 +49,7 @@ function ProjectCard({ project, onOpen }: { project: PortfolioProject; onOpen?: 
           {image}
         </button>
       ) : project.href ? (
-        <a aria-label={`Ver projeto ${project.title}`} className="block rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-primary" href={project.href} target="_blank" rel="noreferrer">
+        <a aria-label={`Ver projeto ${project.title}`} className="block rounded-md focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-brand-primary" href={project.href}>
           {image}
         </a>
       ) : image}

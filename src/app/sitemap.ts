@@ -7,8 +7,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const origin = siteUrl();
   if (!origin) return [];
   const services = await db.service.findMany({ where: { active: true }, select: { slug: true, updatedAt: true } });
+  const projects = await db.portfolioCase.findMany({ where: { status: "PUBLISHED" }, select: { slug: true, updatedAt: true } });
   return [
     ...["/", "/contato", "/projetos"].map(path => ({ url: new URL(path, origin).toString() })),
     ...services.map(service => ({ url: new URL(`/servicos/${service.slug}`, origin).toString(), lastModified: service.updatedAt })),
+    ...projects.map(project => ({ url: new URL(`/projetos/${project.slug}`, origin).toString(), lastModified: project.updatedAt })),
   ];
 }
