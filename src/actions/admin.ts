@@ -7,10 +7,7 @@ import { audit } from "@/lib/audit";
 import { requirePermission } from "@/lib/auth/session";
 import { hashPassword } from "@/lib/security/password";
 
-import {
-  deletePortfolioImage,
-  uploadPortfolioImage,
-} from "@/lib/storage/cloudinary";
+import { createPortfolioImageUploadSignatures } from "@/lib/storage/cloudinary";
 
 import { userSchema, userStatusSchema, leadStatusSchema, serviceSchema, serviceStatusSchema, settingSchema } from "@/lib/validation";
 import { canManageRole } from "@/lib/auth/permissions";
@@ -129,6 +126,11 @@ export type PortfolioCaseFormState = {
   message: string;
 };
 
+export async function getPortfolioImageUploadSignatures(count: number) {
+  await requirePermission("portfolio.manage");
+  return createPortfolioImageUploadSignatures(count);
+}
+
 export async function savePortfolioCase(
   _previousState: PortfolioCaseFormState,
   formData: FormData,
@@ -140,18 +142,9 @@ export async function savePortfolioCase(
   const status = text(formData, "status") as PublicationStatus;
   const summary = text(formData, "summary");
   const manualImageUrl = text(formData, "imageUrl");
-
-  const selectedImages = formData
-    .getAll("imageFiles")
-    .filter(
-      (item): item is File =>
-        item instanceof File && item.size > 0,
-    );
-
-  const uploadedImages: Array<{
-    url: string;
-    publicId: string;
-  }> = [];
+  const coverIndex = Number.parseInt(text(formData, "coverIndex") || "0", 10);
+  const submittedImageUrls = formData.getAll("uploadedImageUrls");
+  const uploadedImageUrls = submittedImageUrls.filter((item): item is string => typeof item === "string").map((url) => url.trim()).filter(Boolean);
 
   const existing = id
     ? await db.portfolioCase.findUnique({
@@ -177,14 +170,27 @@ export async function savePortfolioCase(
     };
   }
 
-  if (selectedImages.length > 3) {
+  if (uploadedImageUrls.length > 4 || uploadedImageUrls.length !== submittedImageUrls.filter((item) => typeof item === "string" && item.trim()).length) {
     return {
       status: "error",
-      message: "Selecione no máximo 3 imagens por projeto.",
+      message: "Selecione no máximo 4 imagens por projeto: 1 capa + 3 fotos adicionais.",
     };
   }
 
-  if (manualImageUrl && manualImageUrl !== existing?.imageUrl && selectedImages.length === 0) {
+  if (uploadedImageUrls.some((url) => {
+    try {
+      return !["http:", "https:"].includes(new URL(url).protocol);
+    } catch {
+      return true;
+    }
+  })) {
+    return {
+      status: "error",
+      message: "Uma das imagens enviadas não possui uma URL válida.",
+    };
+  }
+
+  if (manualImageUrl && manualImageUrl !== existing?.imageUrl && uploadedImageUrls.length === 0) {
     try {
       const parsedUrl = new URL(manualImageUrl);
 
@@ -199,34 +205,42 @@ export async function savePortfolioCase(
     }
   }
 
-  let persisted = false;
-
   try {
-    for (const selectedImage of selectedImages) {
-      uploadedImages.push(
-        await uploadPortfolioImage(selectedImage),
-      );
-    }
-
-    const imageUrls = uploadedImages.map(
-      (image) => image.url,
-    );
-
     const manualImageChanged =
       Boolean(existing) &&
       manualImageUrl !== (existing?.imageUrl ?? "");
 
-    const imageUrl =
-      imageUrls[0] ||
-      (manualImageChanged
-        ? manualImageUrl || null
-        : existing?.imageUrl ?? (manualImageUrl || null));
+    const existingImageUrls = [existing?.imageUrl, ...(existing?.galleryUrls ?? [])].filter((url): url is string => Boolean(url));
+    const normalizedCoverIndex = Number.isFinite(coverIndex)
+      ? Math.min(Math.max(coverIndex, 0), Math.max(uploadedImageUrls.length > 0 ? uploadedImageUrls.length - 1 : existingImageUrls.length - 1, 0))
+      : 0;
 
-    const galleryUrls = imageUrls.length
-      ? imageUrls.slice(1)
-      : manualImageChanged
-        ? []
-        : existing?.galleryUrls ?? [];
+    let imageUrl: string | null = existing?.imageUrl ?? null;
+    let galleryUrls: string[] = existing?.galleryUrls ?? [];
+
+    if (uploadedImageUrls.length > 0) {
+      imageUrl = uploadedImageUrls[normalizedCoverIndex] ?? uploadedImageUrls[0];
+      galleryUrls = uploadedImageUrls
+        .filter((_, index) => index !== normalizedCoverIndex)
+        .slice(0, 3);
+    } else if (manualImageChanged) {
+      imageUrl = manualImageUrl || null;
+      galleryUrls = [];
+    } else if (existingImageUrls.length > 0 && coverIndex >= 0) {
+      imageUrl = existingImageUrls[normalizedCoverIndex] ?? existingImageUrls[0];
+      galleryUrls = existingImageUrls
+        .filter((_, index) => index !== normalizedCoverIndex)
+        .slice(0, 3);
+    } else if (manualImageUrl) {
+      imageUrl = manualImageUrl;
+      galleryUrls = [];
+    } else if (existing && existing.imageUrl && manualImageUrl === existing.imageUrl) {
+      imageUrl = existing.imageUrl;
+      galleryUrls = existing.galleryUrls ?? [];
+    } else {
+      imageUrl = null;
+      galleryUrls = [];
+    }
 
     const data = {
       title,
@@ -251,9 +265,8 @@ export async function savePortfolioCase(
       } else {
         entityId = (await tx.portfolioCase.create({ data })).id;
       }
-      await audit({ actorUserId: actor.id, action: existing ? "UPDATE" : "CREATE", entityType: "PortfolioCase", entityId, metadata: { uploadedImageCount: uploadedImages.length } }, tx);
+      await audit({ actorUserId: actor.id, action: existing ? "UPDATE" : "CREATE", entityType: "PortfolioCase", entityId, metadata: { uploadedImageCount: uploadedImageUrls.length } }, tx);
     });
-    persisted = true;
     revalidatePath("/admin/portfolio");
     revalidatePath("/");
     revalidatePath("/projetos");
@@ -266,21 +279,16 @@ export async function savePortfolioCase(
 
     return {
       status: "success",
-      message: uploadedImages.length
-        ? `${uploadedImages.length} ${
-            uploadedImages.length === 1
+      message: uploadedImageUrls.length
+        ? `${uploadedImageUrls.length} ${
+            uploadedImageUrls.length === 1
               ? "imagem enviada"
               : "imagens enviadas"
           } e case ${operation} com sucesso.`
         : `Case ${operation} com sucesso.`,
     };
-  } catch {
-    await Promise.allSettled(
-      (persisted ? [] : uploadedImages).map((image) =>
-        deletePortfolioImage(image.publicId),
-      ),
-    );
-
+  } catch (error) {
+    console.error("Falha ao salvar case do portfólio.", error);
     return {
       status: "error",
       message: "Não foi possível salvar o projeto. Atualize a página e tente novamente.",

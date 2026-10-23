@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
-import { savePortfolioCase, type PortfolioCaseFormState } from "@/actions/admin";
+import { useActionState, useEffect, useRef, useState, type FormEvent } from "react";
+import { getPortfolioImageUploadSignatures, savePortfolioCase, type PortfolioCaseFormState } from "@/actions/admin";
 
 const initialState: PortfolioCaseFormState = { status: "idle", message: "" };
 const field = "w-full rounded-lg border border-border-strong bg-surface px-3 py-2.5 outline-none transition focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20";
 const acceptedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const maxFileBytes = 5 * 1024 * 1024;
+const maxTotalImages = 4;
 
 type EditablePortfolioCase = {
   id: string;
@@ -21,10 +22,13 @@ type EditablePortfolioCase = {
 export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase }) {
   const [state, formAction, pending] = useActionState(savePortfolioCase, initialState);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [coverIndex, setCoverIndex] = useState(0);
   const [clientError, setClientError] = useState("");
+  const [uploadingImages, setUploadingImages] = useState(false);
   const objectUrlsRef = useRef<string[]>([]);
   const existingPreviewUrls = [project?.imageUrl, ...(project?.galleryUrls ?? [])].filter((url): url is string => Boolean(url));
   const displayedPreviewUrls = previewUrls.length ? previewUrls : existingPreviewUrls;
+  const currentCoverIndex = Math.min(Math.max(coverIndex, 0), Math.max(displayedPreviewUrls.length - 1, 0));
 
   const clearPreview = () => {
     objectUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
@@ -40,8 +44,8 @@ export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase
     clearPreview();
     setClientError("");
     if (files.length === 0) return true;
-    if (files.length > 3) {
-      setClientError("Selecione no máximo 3 imagens por projeto.");
+    if (files.length > maxTotalImages) {
+      setClientError("Selecione no máximo 4 imagens por projeto: 1 capa e 3 fotos adicionais.");
       return false;
     }
     if (files.some((file) => !acceptedTypes.has(file.type))) {
@@ -54,12 +58,61 @@ export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase
     }
     objectUrlsRef.current = files.map((file) => URL.createObjectURL(file));
     setPreviewUrls(objectUrlsRef.current);
+    setCoverIndex(0);
     return true;
   };
 
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    const form = event.currentTarget;
+    const fileInput = form.elements.namedItem("imageFiles");
+    const files = fileInput instanceof HTMLInputElement ? Array.from(fileInput.files ?? []) : [];
+    if (files.length === 0) return;
+
+    event.preventDefault();
+    setClientError("");
+    setUploadingImages(true);
+
+    try {
+      const signatures = await getPortfolioImageUploadSignatures(files.length);
+      const imageUrls = await Promise.all(files.map(async (file, index) => {
+        const signedUpload = signatures[index];
+        if (!signedUpload) throw new Error("Não foi possível preparar o envio das imagens.");
+
+        const body = new FormData();
+        body.set("file", file);
+        body.set("api_key", signedUpload.apiKey);
+        body.set("timestamp", signedUpload.timestamp);
+        body.set("public_id", signedUpload.publicId);
+        body.set("allowed_formats", signedUpload.allowedFormats);
+        body.set("signature", signedUpload.signature);
+
+        const response = await fetch(`https://api.cloudinary.com/v1_1/${encodeURIComponent(signedUpload.cloudName)}/image/upload`, {
+          method: "POST",
+          body,
+        });
+        const result = await response.json() as { secure_url?: string; public_id?: string; error?: { message?: string } };
+        if (!response.ok || !result.secure_url || result.public_id !== signedUpload.publicId) {
+          throw new Error(result.error?.message || "Não foi possível enviar uma das imagens. Tente novamente.");
+        }
+        return result.secure_url;
+      }));
+
+      const formData = new FormData(form);
+      formData.delete("imageFiles");
+      formData.delete("uploadedImageUrls");
+      imageUrls.forEach((url) => formData.append("uploadedImageUrls", url));
+      formAction(formData);
+    } catch (error) {
+      setClientError(error instanceof Error ? error.message : "Não foi possível enviar as imagens. Tente novamente.");
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
   return (
-    <form action={formAction} className="mt-5 grid gap-5">
+    <form action={formAction} className="mt-5 grid gap-5" onSubmit={handleSubmit}>
       {project && <input name="id" type="hidden" value={project.id} />}
+      <input name="coverIndex" type="hidden" value={currentCoverIndex} />
       <label className="grid gap-1.5 text-sm font-semibold text-text-primary">
         Título
         <input className={field} defaultValue={project?.title} name="title" required />
@@ -92,7 +145,7 @@ export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase
               />
             </label>
             <p className="text-xs leading-5 text-text-muted">
-              Até 3 imagens JPG, PNG ou WebP, com no máximo 5 MB cada.
+              Até 4 imagens JPG, PNG ou WebP no total: 1 capa + 3 fotos adicionais, com no máximo 5 MB cada.
               {project
                 ? " Novos arquivos substituirão a galeria atual."
                 : " Os arquivos selecionados têm prioridade sobre a URL manual."}
@@ -105,15 +158,29 @@ export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase
           </div>
 
           <div className="overflow-hidden rounded-lg border border-border bg-surface">
-            <div className={`grid min-h-48 gap-1 bg-background p-1 ${displayedPreviewUrls.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+            <div className={`grid min-h-48 gap-2 bg-background p-2 ${displayedPreviewUrls.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
               {displayedPreviewUrls.length ? displayedPreviewUrls.map((previewUrl, index) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img alt={`Pré-visualização da imagem ${index + 1}`} className={`size-full min-h-0 object-cover ${displayedPreviewUrls.length === 3 && index === 0 ? "col-span-2 aspect-[2/1]" : "aspect-[4/3]"}`} key={previewUrl} src={previewUrl} />
+                <div className="relative overflow-hidden rounded-lg border border-border bg-surface" key={previewUrl}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img alt={`Pré-visualização da imagem ${index + 1}`} className="aspect-[4/3] size-full min-h-0 object-cover" src={previewUrl} />
+                  <button
+                    aria-pressed={index === currentCoverIndex}
+                    className={`absolute inset-x-2 bottom-2 inline-flex items-center justify-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] transition ${index === currentCoverIndex ? "bg-brand-primary text-text-primary" : "bg-surface-inverse/80 text-text-inverse"}`}
+                    onClick={() => setCoverIndex(index)}
+                    type="button"
+                  >
+                    {index === currentCoverIndex ? "Capa" : "Usar como capa"}
+                  </button>
+                </div>
               )) : (
                 <p className="grid min-h-44 place-items-center px-5 text-center text-xs leading-5 text-text-muted">As pré-visualizações aparecerão aqui.</p>
               )}
             </div>
-            {previewUrls.length > 0 && <p className="border-t border-border px-3 py-2 text-center text-xs font-semibold text-brand-accent">{previewUrls.length} {previewUrls.length === 1 ? "imagem pronta" : "imagens prontas"} para envio</p>}
+            {(previewUrls.length > 0 || displayedPreviewUrls.length > 0) && (
+              <p className="border-t border-border px-3 py-2 text-center text-xs font-semibold text-brand-accent">
+                {displayedPreviewUrls.length} {displayedPreviewUrls.length === 1 ? "imagem selecionada" : "imagens selecionadas"} · capa: {currentCoverIndex + 1}
+              </p>
+            )}
           </div>
         </div>
       </fieldset>
@@ -135,7 +202,7 @@ export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase
 
       <div>
         <button className="rounded-lg bg-brand-primary px-5 py-2.5 font-semibold text-text-primary transition hover:bg-brand-primary-hover hover:text-text-inverse focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary disabled:cursor-wait disabled:opacity-60" disabled={pending || Boolean(clientError)} type="submit">
-          {pending ? (previewUrls.length ? "Enviando imagens..." : "Salvando...") : project ? "Salvar alterações" : "Criar case"}
+          {uploadingImages ? "Enviando imagens..." : pending ? "Salvando..." : project ? "Salvar alterações" : "Criar case"}
         </button>
       </div>
     </form>

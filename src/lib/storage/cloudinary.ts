@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 export const MAX_PORTFOLIO_IMAGE_BYTES = 5 * 1024 * 1024;
 export const PORTFOLIO_IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
@@ -30,6 +30,34 @@ function signature(parameters: Record<string, string>, secret: string) {
     .map(([key, item]) => `${key}=${item}`)
     .join("&");
   return createHash("sha1").update(`${value}${secret}`).digest("hex");
+}
+
+export function createPortfolioImageUploadSignatures(count: number) {
+  if (!Number.isInteger(count) || count < 1 || count > 4) {
+    throw new Error("Selecione de 1 a 4 imagens para envio.");
+  }
+
+  const { cloudName, apiKey, apiSecret, folder } = config();
+  const allowedFormats = "jpg,png,webp";
+
+  return Array.from({ length: count }, () => {
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const publicId = `${folder}/${randomUUID()}`;
+    const parameters = {
+      allowed_formats: allowedFormats,
+      public_id: publicId,
+      timestamp,
+    };
+
+    return {
+      cloudName,
+      apiKey,
+      allowedFormats,
+      publicId,
+      timestamp,
+      signature: signature(parameters, apiSecret),
+    };
+  });
 }
 
 async function hasValidSignature(file: File) {
