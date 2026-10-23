@@ -142,9 +142,12 @@ export async function savePortfolioCase(
   const status = text(formData, "status") as PublicationStatus;
   const summary = text(formData, "summary");
   const manualImageUrl = text(formData, "imageUrl");
-  const coverIndex = Number.parseInt(text(formData, "coverIndex") || "0", 10);
-  const submittedImageUrls = formData.getAll("uploadedImageUrls");
-  const uploadedImageUrls = submittedImageUrls.filter((item): item is string => typeof item === "string").map((url) => url.trim()).filter(Boolean);
+  const uploadedCoverImageUrl = text(formData, "uploadedCoverImageUrl");
+  const submittedSlideshowImageUrls = formData.getAll("uploadedSlideshowImageUrls");
+  const uploadedSlideshowImageUrls = submittedSlideshowImageUrls
+    .filter((item): item is string => typeof item === "string")
+    .map((url) => url.trim())
+    .filter(Boolean);
 
   const existing = id
     ? await db.portfolioCase.findUnique({
@@ -170,20 +173,14 @@ export async function savePortfolioCase(
     };
   }
 
-  if (uploadedImageUrls.length > 5 || uploadedImageUrls.length !== submittedImageUrls.filter((item) => typeof item === "string" && item.trim()).length) {
+  if (uploadedSlideshowImageUrls.length > 3 || uploadedSlideshowImageUrls.length !== submittedSlideshowImageUrls.filter((item) => typeof item === "string" && item.trim()).length) {
     return {
       status: "error",
-      message: "Selecione no máximo 4 imagens por projeto: 1 capa + 3 fotos adicionais.",
-    };
-  }
-  if (uploadedImageUrls.length === 1) {
-    return {
-      status: "error",
-      message: "Não foi possível preparar a versão completa da capa para o slideshow. Tente enviar as imagens novamente.",
+      message: "Envie no máximo 3 artes para o slideshow.",
     };
   }
 
-  if (uploadedImageUrls.some((url) => {
+  if ([uploadedCoverImageUrl, ...uploadedSlideshowImageUrls].filter(Boolean).some((url) => {
     try {
       return !["http:", "https:"].includes(new URL(url).protocol);
     } catch {
@@ -196,7 +193,7 @@ export async function savePortfolioCase(
     };
   }
 
-  if (manualImageUrl && manualImageUrl !== existing?.imageUrl && uploadedImageUrls.length === 0) {
+  if (manualImageUrl && manualImageUrl !== existing?.imageUrl && !uploadedCoverImageUrl) {
     try {
       const parsedUrl = new URL(manualImageUrl);
 
@@ -212,49 +209,19 @@ export async function savePortfolioCase(
   }
 
   try {
-    const selectedImageCount = uploadedImageUrls.length > 0 ? uploadedImageUrls.length - 1 : 0;
+    const uploadedImageCount = uploadedSlideshowImageUrls.length + (uploadedCoverImageUrl ? 1 : 0);
     const manualImageChanged =
       Boolean(existing) &&
       manualImageUrl !== (existing?.imageUrl ?? "");
 
-    const existingImageUrls = [existing?.imageUrl, ...(existing?.galleryUrls ?? [])].filter((url): url is string => Boolean(url));
-    const normalizedCoverIndex = Number.isFinite(coverIndex)
-      ? Math.min(Math.max(coverIndex, 0), Math.max(existingImageUrls.length - 1, 0))
-      : 0;
-
-    let imageUrl: string | null = existing?.imageUrl ?? null;
-    let galleryUrls: string[] = existing?.galleryUrls ?? [];
-    let slideshowImageUrl: string | null = existing?.slideshowImageUrl ?? null;
-
-    if (uploadedImageUrls.length > 0) {
-      imageUrl = uploadedImageUrls[0] ?? null;
-      slideshowImageUrl = uploadedImageUrls[1] ?? null;
-      galleryUrls = uploadedImageUrls.slice(2, 5);
-    } else if (manualImageChanged) {
-      imageUrl = manualImageUrl || null;
-      slideshowImageUrl = null;
-      galleryUrls = [];
-    } else if (existingImageUrls.length > 0 && coverIndex >= 0) {
-      imageUrl = existingImageUrls[normalizedCoverIndex] ?? existingImageUrls[0];
-      slideshowImageUrl = normalizedCoverIndex === 0
-        ? existing?.slideshowImageUrl ?? null
-        : existingImageUrls[normalizedCoverIndex] ?? null;
-      galleryUrls = existingImageUrls
-        .filter((_, index) => index !== normalizedCoverIndex)
-        .slice(0, 3);
-    } else if (manualImageUrl) {
-      imageUrl = manualImageUrl;
-      slideshowImageUrl = null;
-      galleryUrls = [];
-    } else if (existing && existing.imageUrl && manualImageUrl === existing.imageUrl) {
-      imageUrl = existing.imageUrl;
-      slideshowImageUrl = existing.slideshowImageUrl ?? null;
-      galleryUrls = existing.galleryUrls ?? [];
-    } else {
-      imageUrl = null;
-      slideshowImageUrl = null;
-      galleryUrls = [];
-    }
+    const imageUrl = uploadedCoverImageUrl
+      || (manualImageChanged ? manualImageUrl || null : existing?.imageUrl ?? (manualImageUrl || null));
+    const slideshowImageUrl = uploadedSlideshowImageUrls.length > 0
+      ? uploadedSlideshowImageUrls[0] ?? null
+      : existing?.slideshowImageUrl ?? null;
+    const galleryUrls = uploadedSlideshowImageUrls.length > 0
+      ? uploadedSlideshowImageUrls.slice(1)
+      : existing?.galleryUrls ?? [];
 
     const data = {
       title,
@@ -280,7 +247,7 @@ export async function savePortfolioCase(
       } else {
         entityId = (await tx.portfolioCase.create({ data })).id;
       }
-      await audit({ actorUserId: actor.id, action: existing ? "UPDATE" : "CREATE", entityType: "PortfolioCase", entityId, metadata: { uploadedImageCount: selectedImageCount } }, tx);
+      await audit({ actorUserId: actor.id, action: existing ? "UPDATE" : "CREATE", entityType: "PortfolioCase", entityId, metadata: { uploadedImageCount } }, tx);
     });
     revalidatePath("/admin/portfolio");
     revalidatePath("/");
@@ -294,9 +261,9 @@ export async function savePortfolioCase(
 
     return {
       status: "success",
-      message: selectedImageCount
-        ? `${selectedImageCount} ${
-            selectedImageCount === 1
+      message: uploadedImageCount
+        ? `${uploadedImageCount} ${
+            uploadedImageCount === 1
               ? "imagem enviada"
               : "imagens enviadas"
           } e case ${operation} com sucesso.`

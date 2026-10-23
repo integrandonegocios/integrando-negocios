@@ -24,7 +24,7 @@ function toPortfolioProject(item: {
     imageAlt: `Apresentação do projeto ${item.title}`,
     gallery: item.galleryUrls.map((image, index) => ({
       image,
-      imageAlt: `${item.title}, imagem ${index + 2}`,
+      imageAlt: `${item.title}, imagem ${index + (item.slideshowImageUrl ? 2 : 1)}`,
     })),
     href: `/projetos/${item.slug}`,
   };

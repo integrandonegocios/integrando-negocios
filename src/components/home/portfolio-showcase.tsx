@@ -24,7 +24,7 @@ function ProjectImage({ image, imageAlt, imagePosition, lightbox = false }: { im
   }
 
   const imageClass = lightbox
-    ? "object-contain"
+    ? "object-cover"
     : `object-cover transition duration-300 ease-out group-hover:scale-[1.025] ${imagePosition ?? "object-center"}`;
 
   return image.startsWith("/") ? (
@@ -66,8 +66,11 @@ export function PortfolioShowcase({ managedProjects, limit, columns = 3, enableL
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const [imageIndex, setImageIndex] = useState(0);
   const selectedProject = lightboxIndex === null ? undefined : visibleProjects[lightboxIndex];
-  const selectedImages = selectedProject?.image
-    ? [{ image: selectedProject.slideshowImage ?? selectedProject.image, imageAlt: selectedProject.imageAlt, imagePosition: selectedProject.imagePosition }, ...(selectedProject.gallery ?? [])]
+  const selectedImages = selectedProject
+    ? [
+        ...(selectedProject.slideshowImage ? [{ image: selectedProject.slideshowImage, imageAlt: selectedProject.imageAlt, imagePosition: selectedProject.imagePosition }] : []),
+        ...(selectedProject.gallery ?? []),
+      ]
     : [];
   const imageCount = selectedImages.length;
   const selectedImage = selectedImages[imageIndex];
@@ -100,7 +103,7 @@ export function PortfolioShowcase({ managedProjects, limit, columns = 3, enableL
     <div>
       {visibleProjects.length === 0 && <p className="text-text-secondary">Nenhum projeto publicado no momento.</p>}
       <div className={`grid gap-5 md:grid-cols-2 ${columns === 4 ? "lg:grid-cols-4" : "lg:grid-cols-3"}`}>
-        {visibleProjects.map((project, index) => <ProjectCard key={project.id} onOpen={enableLightbox ? () => { setImageIndex(0); setLightboxIndex(index); } : undefined} project={project} />)}
+        {visibleProjects.map((project, index) => <ProjectCard key={project.id} onOpen={enableLightbox && (project.slideshowImage || project.gallery?.length) ? () => { setImageIndex(0); setLightboxIndex(index); } : undefined} project={project} />)}
       </div>
 
       {selectedProject && selectedImage && (

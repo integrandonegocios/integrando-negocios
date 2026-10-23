@@ -32,7 +32,7 @@ export default async function PortfolioProjectPage({ params }: Props) {
   if (!project) notFound();
 
   const images = [
-    ...(project.image ? [{ image: project.slideshowImage ?? project.image, imageAlt: project.imageAlt }] : []),
+    ...(project.slideshowImage ? [{ image: project.slideshowImage, imageAlt: project.imageAlt }] : []),
     ...(project.gallery ?? []).map(({ image, imageAlt }) => ({ image, imageAlt })),
   ];
 
