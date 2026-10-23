@@ -8,6 +8,8 @@ const field = "w-full rounded-lg border border-border-strong bg-surface px-3 py-
 const acceptedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 const maxFileBytes = 5 * 1024 * 1024;
 const maxTotalImages = 4;
+const coverDimensions = { width: 1600, height: 1200 };
+const slideshowDimensions = { width: 1672, height: 941 };
 
 type EditablePortfolioCase = {
   id: string;
@@ -18,6 +20,50 @@ type EditablePortfolioCase = {
   galleryUrls: string[];
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
 };
+
+async function preparePortfolioImage(file: File, isCover: boolean) {
+  const dimensions = isCover ? coverDimensions : slideshowDimensions;
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = dimensions.width;
+  canvas.height = dimensions.height;
+
+  try {
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Não foi possível processar uma das imagens.");
+
+    const scale = isCover
+      ? Math.max(dimensions.width / bitmap.width, dimensions.height / bitmap.height)
+      : Math.min(dimensions.width / bitmap.width, dimensions.height / bitmap.height);
+    const width = bitmap.width * scale;
+    const height = bitmap.height * scale;
+    const x = (dimensions.width - width) / 2;
+    const y = (dimensions.height - height) / 2;
+    context.drawImage(bitmap, x, y, width, height);
+
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (!result) {
+          reject(new Error("Não foi possível processar uma das imagens."));
+          return;
+        }
+        resolve(result);
+      }, "image/webp", 0.9);
+    });
+
+    if (blob.type !== "image/webp") {
+      throw new Error("Este navegador não oferece suporte ao formato WebP necessário para preparar as imagens.");
+    }
+    if (blob.size > maxFileBytes) {
+      throw new Error("Uma imagem excedeu 5 MB após o redimensionamento. Use uma imagem original menor.");
+    }
+
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "portfolio";
+    return new File([blob], `${baseName}.webp`, { type: "image/webp" });
+  } finally {
+    bitmap.close();
+  }
+}
 
 export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase }) {
   const [state, formAction, pending] = useActionState(savePortfolioCase, initialState);
@@ -73,8 +119,9 @@ export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase
     setUploadingImages(true);
 
     try {
-      const signatures = await getPortfolioImageUploadSignatures(files.length);
-      const imageUrls = await Promise.all(files.map(async (file, index) => {
+      const processedFiles = await Promise.all(files.map((file, index) => preparePortfolioImage(file, index === currentCoverIndex)));
+      const signatures = await getPortfolioImageUploadSignatures(processedFiles.length);
+      const imageUrls = await Promise.all(processedFiles.map(async (file, index) => {
         const signedUpload = signatures[index];
         if (!signedUpload) throw new Error("Não foi possível preparar o envio das imagens.");
 
@@ -137,6 +184,7 @@ export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase
                 className="block w-full cursor-pointer rounded-lg border border-border-strong bg-surface text-sm text-text-secondary file:mr-4 file:border-0 file:border-r file:border-border file:bg-brand-primary-subtle file:px-4 file:py-2.5 file:font-semibold file:text-brand-accent hover:file:bg-brand-primary-light focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
                 multiple
                 name="imageFiles"
+                disabled={uploadingImages || pending}
                 onChange={(event) => {
                   const valid = selectFiles(Array.from(event.currentTarget.files ?? []));
                   if (!valid) event.currentTarget.value = "";
@@ -145,7 +193,7 @@ export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase
               />
             </label>
             <p className="text-xs leading-5 text-text-muted">
-              Até 4 imagens JPG, PNG ou WebP no total: 1 capa + 3 fotos adicionais, com no máximo 5 MB cada.
+              Até 4 imagens, com no máximo 5 MB cada. A capa será padronizada em 1600 × 1200 px (4:3); as outras imagens, em 1672 × 941 px (16:9), preservando a arte completa.
               {project
                 ? " Novos arquivos substituirão a galeria atual."
                 : " Os arquivos selecionados têm prioridade sobre a URL manual."}
@@ -162,10 +210,15 @@ export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase
               {displayedPreviewUrls.length ? displayedPreviewUrls.map((previewUrl, index) => (
                 <div className="relative overflow-hidden rounded-lg border border-border bg-surface" key={previewUrl}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img alt={`Pré-visualização da imagem ${index + 1}`} className="aspect-[4/3] size-full min-h-0 object-cover" src={previewUrl} />
+                  <img
+                    alt={`Pré-visualização da imagem ${index + 1}`}
+                    className={`size-full min-h-0 ${index === currentCoverIndex ? "aspect-[4/3] object-cover" : "aspect-[16/9] object-contain"}`}
+                    src={previewUrl}
+                  />
                   <button
                     aria-pressed={index === currentCoverIndex}
                     className={`absolute inset-x-2 bottom-2 inline-flex items-center justify-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] transition ${index === currentCoverIndex ? "bg-brand-primary text-text-primary" : "bg-surface-inverse/80 text-text-inverse"}`}
+                    disabled={uploadingImages || pending}
                     onClick={() => setCoverIndex(index)}
                     type="button"
                   >
@@ -202,7 +255,7 @@ export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase
 
       <div>
         <button className="rounded-lg bg-brand-primary px-5 py-2.5 font-semibold text-text-primary transition hover:bg-brand-primary-hover hover:text-text-inverse focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary disabled:cursor-wait disabled:opacity-60" disabled={pending || Boolean(clientError)} type="submit">
-          {uploadingImages ? "Enviando imagens..." : pending ? "Salvando..." : project ? "Salvar alterações" : "Criar case"}
+          {uploadingImages ? "Preparando e enviando imagens..." : pending ? "Salvando..." : project ? "Salvar alterações" : "Criar case"}
         </button>
       </div>
     </form>
