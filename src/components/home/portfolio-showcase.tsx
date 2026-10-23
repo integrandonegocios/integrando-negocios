@@ -10,6 +10,7 @@ export type PortfolioProject = {
   description: string;
   content?: string;
   image?: string;
+  slideshowImage?: string;
   imageAlt: string;
   imagePosition?: string;
   gallery?: Array<{ image: string; imageAlt: string; imagePosition?: string }>;
@@ -66,7 +67,7 @@ export function PortfolioShowcase({ managedProjects, limit, columns = 3, enableL
   const [imageIndex, setImageIndex] = useState(0);
   const selectedProject = lightboxIndex === null ? undefined : visibleProjects[lightboxIndex];
   const selectedImages = selectedProject?.image
-    ? [{ image: selectedProject.image, imageAlt: selectedProject.imageAlt, imagePosition: selectedProject.imagePosition }, ...(selectedProject.gallery ?? [])]
+    ? [{ image: selectedProject.slideshowImage ?? selectedProject.image, imageAlt: selectedProject.imageAlt, imagePosition: selectedProject.imagePosition }, ...(selectedProject.gallery ?? [])]
     : [];
   const imageCount = selectedImages.length;
   const selectedImage = selectedImages[imageIndex];

@@ -10,6 +10,7 @@ function toPortfolioProject(item: {
   summary: string;
   content: string | null;
   imageUrl: string | null;
+  slideshowImageUrl: string | null;
   galleryUrls: string[];
 }): PortfolioProject {
   return {
@@ -19,6 +20,7 @@ function toPortfolioProject(item: {
     description: item.summary,
     content: item.content ?? undefined,
     image: item.imageUrl ?? undefined,
+    slideshowImage: item.slideshowImageUrl ?? undefined,
     imageAlt: `Apresentação do projeto ${item.title}`,
     gallery: item.galleryUrls.map((image, index) => ({
       image,
@@ -42,7 +44,7 @@ export async function getPublishedPortfolioProjects(limit?: number, offset = 0):
 export async function getPublishedPortfolioProject(slug: string): Promise<PortfolioProject | null> {
   const item = await db.portfolioCase.findFirst({
     where: { slug, status: "PUBLISHED" },
-    select: { id: true, slug: true, title: true, summary: true, content: true, imageUrl: true, galleryUrls: true },
+    select: { id: true, slug: true, title: true, summary: true, content: true, imageUrl: true, slideshowImageUrl: true, galleryUrls: true },
   });
 
   return item ? toPortfolioProject(item) : null;

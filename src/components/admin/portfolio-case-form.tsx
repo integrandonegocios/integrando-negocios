@@ -17,12 +17,16 @@ type EditablePortfolioCase = {
   summary: string;
   content: string | null;
   imageUrl: string | null;
+  slideshowImageUrl: string | null;
   galleryUrls: string[];
   status: "DRAFT" | "PUBLISHED" | "ARCHIVED";
 };
 
-async function preparePortfolioImage(file: File, isCover: boolean) {
-  const dimensions = isCover ? coverDimensions : slideshowDimensions;
+async function preparePortfolioImage(
+  file: File,
+  dimensions: typeof coverDimensions | typeof slideshowDimensions,
+  fit: "cover" | "contain",
+) {
   const bitmap = await createImageBitmap(file);
   const canvas = document.createElement("canvas");
   canvas.width = dimensions.width;
@@ -32,7 +36,7 @@ async function preparePortfolioImage(file: File, isCover: boolean) {
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Não foi possível processar uma das imagens.");
 
-    const scale = isCover
+    const scale = fit === "cover"
       ? Math.max(dimensions.width / bitmap.width, dimensions.height / bitmap.height)
       : Math.min(dimensions.width / bitmap.width, dimensions.height / bitmap.height);
     const width = bitmap.width * scale;
@@ -119,7 +123,17 @@ export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase
     setUploadingImages(true);
 
     try {
-      const processedFiles = await Promise.all(files.map((file, index) => preparePortfolioImage(file, index === currentCoverIndex)));
+      const coverFile = files[currentCoverIndex];
+      if (!coverFile) throw new Error("Selecione uma imagem para a capa.");
+
+      const [coverImage, slideshowCover, galleryImages] = await Promise.all([
+        preparePortfolioImage(coverFile, coverDimensions, "cover"),
+        preparePortfolioImage(coverFile, slideshowDimensions, "contain"),
+        Promise.all(files
+          .filter((_, index) => index !== currentCoverIndex)
+          .map((file) => preparePortfolioImage(file, slideshowDimensions, "contain"))),
+      ]);
+      const processedFiles = [coverImage, slideshowCover, ...galleryImages];
       const signatures = await getPortfolioImageUploadSignatures(processedFiles.length);
       const imageUrls = await Promise.all(processedFiles.map(async (file, index) => {
         const signedUpload = signatures[index];
@@ -195,7 +209,7 @@ export function PortfolioCaseForm({ project }: { project?: EditablePortfolioCase
             <p className="text-xs leading-5 text-text-muted">
               Até 4 imagens, com no máximo 5 MB cada. A capa será padronizada em 1600 × 1200 px (4:3); as outras imagens, em 1672 × 941 px (16:9), preservando a arte completa.
               {project
-                ? " Novos arquivos substituirão a galeria atual."
+                ? " Novos arquivos substituirão a galeria atual. Reenvie os originais de cases antigos para recuperar a arte completa no slideshow."
                 : " Os arquivos selecionados têm prioridade sobre a URL manual."}
             </p>
             <div className="flex items-center gap-3 text-xs font-semibold uppercase tracking-[.12em] text-text-muted"><span className="h-px flex-1 bg-border" />ou<span className="h-px flex-1 bg-border" /></div>

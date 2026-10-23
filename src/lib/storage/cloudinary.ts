@@ -33,8 +33,8 @@ function signature(parameters: Record<string, string>, secret: string) {
 }
 
 export function createPortfolioImageUploadSignatures(count: number) {
-  if (!Number.isInteger(count) || count < 1 || count > 4) {
-    throw new Error("Selecione de 1 a 4 imagens para envio.");
+  if (!Number.isInteger(count) || count < 1 || count > 5) {
+    throw new Error("A preparação deve conter de 1 a 5 imagens.");
   }
 
   const { cloudName, apiKey, apiSecret, folder } = config();

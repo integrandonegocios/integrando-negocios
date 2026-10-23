@@ -142,6 +142,7 @@ model PortfolioCase {
   summary     String
   content     String?
   imageUrl    String?
+  slideshowImageUrl String?
   galleryUrls String[]          @default([])
   status      PublicationStatus @default(DRAFT)
   publishedAt DateTime?
