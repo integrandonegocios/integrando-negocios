@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { contactSchema } from "@/lib/validation";
 import { allowAuthAttempt } from "@/lib/security/rate-limit";
 import { emailConfigurationError, sendContactNotificationEmail } from "@/lib/email";
+import { contactWhatsAppConfiguration, sendContactNotificationWhatsApp } from "@/lib/whatsapp";
 
 export type ContactState = { success?: boolean; error?: string };
 
@@ -28,25 +29,40 @@ export async function submitContact(_: ContactState, formData: FormData): Promis
       return { lead, recipients };
     });
 
-    if (recipients.length) {
+    const whatsappConfiguration = contactWhatsAppConfiguration();
+    if (recipients.length || whatsappConfiguration.enabled || whatsappConfiguration.error) {
       after(async () => {
-        const configurationError = emailConfigurationError();
-        if (configurationError) {
-          console.error("CONTACT_NOTIFICATION_EMAIL_CONFIGURATION_FAILED", configurationError);
-          return;
+        const tasks: Promise<unknown>[] = [];
+        if (recipients.length) {
+          const configurationError = emailConfigurationError();
+          if (configurationError) {
+            console.error("CONTACT_NOTIFICATION_EMAIL_CONFIGURATION_FAILED", configurationError);
+          } else {
+            tasks.push(...recipients.map(({ email }) => sendContactNotificationEmail(email, lead)));
+          }
         }
 
-        const results = await Promise.allSettled(
-          recipients.map(({ email }) => sendContactNotificationEmail(email, lead)),
-        );
+        const whatsapp = contactWhatsAppConfiguration();
+        if (whatsapp.error) {
+          console.error("CONTACT_NOTIFICATION_WHATSAPP_CONFIGURATION_FAILED", whatsapp.error);
+        } else if (whatsapp.enabled) {
+          tasks.push(sendContactNotificationWhatsApp(whatsapp.to, lead));
+        }
+
+        const results = await Promise.allSettled(tasks);
         const failures = results.flatMap(result => {
           if (result.status === "fulfilled") return [];
-          const code = result.reason instanceof Error && /^EMAIL_DELIVERY_FAILED_[1-5]\d\d$/.test(result.reason.message)
+          const code = result.reason instanceof Error && /^(EMAIL|WHATSAPP)_DELIVERY_FAILED_[1-5]\d\d$/.test(result.reason.message)
             ? result.reason.message
-            : "EMAIL_DELIVERY_FAILED";
+            : "NOTIFICATION_DELIVERY_FAILED";
           return [code];
         });
-        if (failures.length) console.error("CONTACT_NOTIFICATION_EMAIL_FAILED", failures);
+        if (failures.some(error => error.startsWith("EMAIL_"))) {
+          console.error("CONTACT_NOTIFICATION_EMAIL_FAILED", failures.filter(error => error.startsWith("EMAIL_")));
+        }
+        if (failures.some(error => error.startsWith("WHATSAPP_"))) {
+          console.error("CONTACT_NOTIFICATION_WHATSAPP_FAILED", failures.filter(error => error.startsWith("WHATSAPP_")));
+        }
       });
     }
     return { success: true };
