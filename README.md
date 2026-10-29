@@ -16,11 +16,13 @@ Site institucional e área administrativa em Next.js 16, React 19, Tailwind CSS 
 
 O site fica em `http://localhost:3000`; a área interna, em `/login` e `/admin`.
 
-## Recuperação de senha em produção
+## E-mails transacionais em produção
 
-O envio do link usa o Resend. Configure `APP_URL` com a URL HTTPS pública do site, `RESEND_API_KEY` com uma chave válida e `EMAIL_FROM` com um remetente/domínio verificado no Resend. Na Vercel, adicione as três variáveis em **Project Settings → Environment Variables** para **Production** e faça um novo deploy para aplicá-las.
+O envio usa o Resend. Configure `APP_URL` com a URL HTTPS pública do site, `RESEND_API_KEY` com uma chave válida e `EMAIL_FROM` com um remetente de domínio verificado no Resend. Na Vercel, adicione as três variáveis em **Project Settings → Environment Variables** para **Production** e faça um novo deploy para aplicá-las.
 
-Sem essas variáveis ou com `APP_URL` inválida, o formulário informa que a recuperação está temporariamente indisponível. Falhas de entrega do Resend ficam registradas nos logs da função da Vercel como `PASSWORD_RESET_EMAIL_FAILED`; o código HTTP ajuda a identificar a causa. Consulte também os logs de e-mail no painel do Resend. A confirmação normal do formulário é intencionalmente igual para e-mails cadastrados e não cadastrados.
+O formulário público cria o contato e a notificação interna mesmo sem e-mail configurado. Para receber avisos por e-mail, mantenha ao menos um usuário ativo com a permissão `contacts.read`; cada usuário autorizado recebe o aviso no endereço cadastrado na área administrativa. As mensagens são enviadas individualmente pelo Resend.
+
+Sem essas variáveis ou com `APP_URL` inválida, o link de recuperação não é enviado e os avisos de novos contatos são ignorados; falhas aparecem nos logs das funções da Vercel como `PASSWORD_RESET_EMAIL_CONFIGURATION_FAILED`, `PASSWORD_RESET_EMAIL_FAILED`, `CONTACT_NOTIFICATION_EMAIL_CONFIGURATION_FAILED` ou `CONTACT_NOTIFICATION_EMAIL_FAILED`. Consulte também os logs de e-mail no painel do Resend. A confirmação normal do formulário continua sem revelar detalhes técnicos nem impedir que o contato seja salvo.
 
 ## Scripts
 

@@ -9,7 +9,7 @@ import { hashPassword, verifyPassword } from "@/lib/security/password";
 import { createResetToken, hashResetToken } from "@/lib/security/reset-token";
 import { allowAuthAttempt } from "@/lib/security/rate-limit";
 import { changePasswordSchema, forgotPasswordSchema, resetPasswordSchema } from "@/lib/validation";
-import { passwordResetEmailConfigurationError, sendPasswordResetEmail } from "@/lib/email";
+import { emailConfigurationError, sendPasswordResetEmail } from "@/lib/email";
 
 export type PasswordState = { error?: string; success?: string };
 const genericMessage = "Se existir uma conta cadastrada com esse e-mail, enviaremos as instruções para redefinição da senha.";
@@ -47,7 +47,7 @@ export async function requestPasswordReset(_: PasswordState, formData: FormData)
   if (!parsed.success) return { error: "Informe um e-mail válido." };
   try {
     if (await allowAuthAttempt("forgot", parsed.data.email)) {
-      const configurationError = passwordResetEmailConfigurationError();
+      const configurationError = emailConfigurationError();
       if (configurationError) {
         console.error("PASSWORD_RESET_EMAIL_CONFIGURATION_FAILED", configurationError);
         return { error: "A recuperação de senha está temporariamente indisponível. Contate o administrador." };
